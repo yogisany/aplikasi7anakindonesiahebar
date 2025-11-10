@@ -70,7 +70,7 @@ const LoginPage: React.FC<LoginPageProps> = ({ onLogin }) => {
 
           <div>
             <Button type="submit" className="w-full">
-              Masuk
+              Login
             </Button>
           </div>
         </form>
