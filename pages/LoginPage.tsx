@@ -27,11 +27,14 @@ const LoginPage: React.FC<LoginPageProps> = ({ onLogin }) => {
   };
 
   return (
-    <div className="flex items-center justify-center min-h-screen bg-primary-100">
-      <div className="w-full max-w-md p-8 space-y-8 bg-white rounded-lg shadow-2xl">
+    <div 
+      className="flex items-center justify-center min-h-screen bg-cover bg-center"
+      style={{ backgroundImage: "url('https://storage.googleapis.com/project-os-prod/images/405a3962-8e7c-4735-9610-244e4324f9e1.png')" }}
+    >
+      <div className="w-full max-w-md p-8 space-y-8 bg-white/90 backdrop-blur-sm rounded-lg shadow-2xl">
         <div className="text-center">
           <h1 className="text-3xl font-bold text-primary-800">Selamat Datang</h1>
-          <p className="mt-2 text-gray-600">Pemantauan 7 Kebiasaan Anak Hebat</p>
+          <p className="mt-2 text-gray-600">Pemantauan 7 Kebiasaan Anak Indonesia Hebat</p>
         </div>
         <form className="mt-8 space-y-6" onSubmit={handleSubmit}>
           <div className="rounded-md shadow-sm -space-y-px">

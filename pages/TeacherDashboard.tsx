@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { User, Student, HabitRecord, Habit, Rating } from '../types';
 import Header from '../components/Header';
@@ -365,7 +366,7 @@ const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ user, onLogout }) =
 
   return (
     <>
-      <Header user={user} onLogout={onLogout} title="Teacher Dashboard" />
+      <Header user={user} onLogout={onLogout} title="Dashboard Guru" />
       <main className="container mx-auto p-4 md:p-6">
         <div className="bg-white p-4 sm:p-6 rounded-lg shadow-md">
             <div className="border-b border-gray-200">

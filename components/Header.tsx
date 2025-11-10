@@ -18,7 +18,7 @@ const Header: React.FC<HeaderProps> = ({ user, onLogout, title }) => {
         <div className="flex items-center gap-4">
           <div className="text-right">
             <p className="font-semibold text-gray-700">{user.name}</p>
-            <p className="text-sm text-gray-500 capitalize">{user.role}</p>
+            <p className="text-sm text-gray-500 capitalize">{user.role === 'teacher' ? 'Guru' : user.role}</p>
           </div>
           <Button onClick={onLogout} variant="danger" aria-label="Logout">
             <LogoutIcon className="w-5 h-5" />
