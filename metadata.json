@@ -1,0 +1,5 @@
+{
+  "name": "Aplikasi Pemantauan 7 Kebiasaan Anak Hebat",
+  "description": "A web application to monitor the 7 key habits of great Indonesian children, designed for teachers and administrators. Features include student management, habit tracking, data visualization, and PDF reporting.",
+  "requestFramePermissions": []
+}
