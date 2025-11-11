@@ -409,6 +409,26 @@ const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ user, onLogout }) =
 
       sheetData.push(['Keterangan: Angka dalam tabel merupakan nilai/skor kebiasaan harian (skala 1-5).']);
       merges.push({ s: { r: currentRow, c: 0 }, e: { r: currentRow, c: numCols - 1 } });
+      currentRow++;
+      
+      const legend = [
+        [], // Spacer
+        ['Arti Nilai Skala:'],
+        ['5 = Sudah Terbiasa'],
+        ['4 = Terbiasa'],
+        ['3 = Belum Terbiasa'],
+        ['2 = Kurang Terbiasa'],
+        ['1 = Sangat Tidak Terbiasa'],
+      ];
+
+      legend.forEach(row => {
+          sheetData.push(row);
+          if(row.length > 0) {
+            merges.push({ s: { r: currentRow, c: 0 }, e: { r: currentRow, c: numCols - 1 } });
+          }
+          currentRow++;
+      });
+
 
       const ws = XLSX.utils.aoa_to_sheet(sheetData);
       ws['!merges'] = merges;
@@ -594,8 +614,18 @@ const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ user, onLogout }) =
                                         </div>
                                     ))}
                                     {monthlyReportData.length === 0 && <p className="text-center text-gray-500 py-4">Tidak ada data ditemukan untuk periode ini.</p>}
-                                     <div className="mt-6 text-xs text-gray-600">
-                                        <p><strong>Keterangan:</strong> Angka dalam tabel merupakan nilai/skor kebiasaan harian (skala 1-5).</p>
+                                    <div className="mt-6 text-xs text-gray-600">
+                                        <p><strong>Keterangan:</strong> Angka dalam tabel merupakan nilai/skor kebiasaan harian.</p>
+                                        <div className="mt-2 p-2 border rounded-md bg-gray-50">
+                                            <p className="font-bold">Arti Nilai Skala:</p>
+                                            <ul className="list-none pl-0">
+                                                <li><strong>5</strong> = Sudah Terbiasa</li>
+                                                <li><strong>4</strong> = Terbiasa</li>
+                                                <li><strong>3</strong> = Belum Terbiasa</li>
+                                                <li><strong>2</strong> = Kurang Terbiasa</li>
+                                                <li><strong>1</strong> = Sangat Tidak Terbiasa</li>
+                                            </ul>
+                                        </div>
                                     </div>
                                 </div>
                                 <div className="text-center flex justify-center gap-4">
