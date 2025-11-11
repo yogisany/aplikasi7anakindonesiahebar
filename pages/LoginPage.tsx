@@ -27,53 +27,62 @@ const LoginPage: React.FC<LoginPageProps> = ({ onLogin }) => {
   };
 
   return (
-    <div 
-      className="flex items-center justify-center min-h-screen bg-cover bg-center"
-      style={{ backgroundImage: "url('https://storage.googleapis.com/project-os-prod/images/3c81523c-7c27-4a6c-851c-8e3b334a1793.png')" }}
-    >
-      <div className="w-full max-w-md p-8 space-y-8 bg-white/90 backdrop-blur-sm rounded-lg shadow-2xl">
-        <div className="text-center">
-          <h1 className="text-3xl font-bold text-primary-800">Selamat Datang</h1>
-          <p className="mt-2 text-gray-600">Pemantauan 7 Kebiasaan Anak Indonesia Hebat</p>
+    <div className="min-h-screen bg-primary-50 flex items-center justify-center p-4">
+      <div className="w-full max-w-4xl mx-auto bg-white shadow-2xl rounded-2xl flex overflow-hidden">
+        {/* Left Side - Illustration */}
+        <div className="hidden md:flex md:w-1/2 bg-primary-200 p-8 flex-col justify-center items-center text-center text-primary-800">
+           <img src="https://storage.googleapis.com/project-os-prod/images/5f14e67d-f222-4853-8356-f8b1a3746a39.svg" alt="Ilustrasi Anak Hebat" className="w-full max-w-sm" />
+           <h1 className="text-3xl font-bold mt-4">7 Kebiasaan Anak Hebat</h1>
+           <p className="mt-2 text-primary-700">Membentuk Generasi Unggul Sejak Dini</p>
         </div>
-        <form className="mt-8 space-y-6" onSubmit={handleSubmit}>
-          <div className="rounded-md shadow-sm -space-y-px">
-            <div>
-              <label htmlFor="username" className="sr-only">Username</label>
-              <input
-                id="username"
-                name="username"
-                type="text"
-                required
-                className="appearance-none rounded-none relative block w-full px-3 py-2 border border-gray-300 placeholder-gray-500 text-gray-900 rounded-t-md focus:outline-none focus:ring-primary-500 focus:border-primary-500 focus:z-10 sm:text-sm"
-                placeholder="Username"
-                value={username}
-                onChange={(e) => setUsername(e.target.value)}
-              />
-            </div>
-            <div>
-              <label htmlFor="password-input" className="sr-only">Password</label>
-              <input
-                id="password-input"
-                name="password"
-                type="password"
-                required
-                className="appearance-none rounded-none relative block w-full px-3 py-2 border border-gray-300 placeholder-gray-500 text-gray-900 rounded-b-md focus:outline-none focus:ring-primary-500 focus:border-primary-500 focus:z-10 sm:text-sm"
-                placeholder="Password"
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-              />
-            </div>
-          </div>
-          
-          {error && <p className="text-red-500 text-sm text-center">{error}</p>}
+        
+        {/* Right Side - Form */}
+        <div className="w-full md:w-1/2 p-8 sm:p-12 flex flex-col justify-center">
+            <h2 className="text-3xl font-bold text-primary-800 mb-2 text-center">Selamat Datang!</h2>
+            <p className="text-gray-600 mb-8 text-center">Silakan masuk untuk melanjutkan.</p>
+            
+            <form onSubmit={handleSubmit} className="space-y-5">
+              <div className="relative">
+                <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                  <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 text-primary-400" viewBox="0 0 20 20" fill="currentColor">
+                    <path fillRule="evenodd" d="M10 9a3 3 0 100-6 3 3 0 000 6zm-7 9a7 7 0 1114 0H3z" clipRule="evenodd" />
+                  </svg>
+                </div>
+                <input
+                  className="w-full pl-10 pr-3 py-3 rounded-xl border-2 border-primary-200 bg-primary-50 focus:outline-none focus:border-primary-400 transition-colors"
+                  type="text"
+                  placeholder="Username"
+                  value={username}
+                  onChange={(e) => setUsername(e.target.value)}
+                  required
+                  aria-label="Username"
+                />
+              </div>
 
-          <div>
-            <Button type="submit" className="w-full">
-              Login
-            </Button>
-          </div>
-        </form>
+              <div className="relative">
+                <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                  <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 text-primary-400" viewBox="0 0 20 20" fill="currentColor">
+                    <path fillRule="evenodd" d="M5 9V7a5 5 0 0110 0v2a2 2 0 012 2v5a2 2 0 01-2 2H5a2 2 0 01-2-2v-5a2 2 0 012-2zm8-2v2H7V7a3 3 0 016 0z" clipRule="evenodd" />
+                  </svg>
+                </div>
+                <input
+                  className="w-full pl-10 pr-3 py-3 rounded-xl border-2 border-primary-200 bg-primary-50 focus:outline-none focus:border-primary-400 transition-colors"
+                  type="password"
+                  placeholder="Password"
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                  required
+                  aria-label="Password"
+                />
+              </div>
+
+              {error && <p className="text-sm text-red-600 text-center">{error}</p>}
+
+              <Button type="submit" className="w-full !py-3 !rounded-xl text-lg tracking-wider">
+                LOGIN
+              </Button>
+            </form>
+        </div>
       </div>
     </div>
   );
