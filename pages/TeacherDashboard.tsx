@@ -1,4 +1,5 @@
 
+
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { User, Student, HabitRecord, Habit, Rating, RatingValue } from '../types';
 import Header from '../components/Header';
@@ -351,6 +352,82 @@ const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ user, onLogout }) =
       }
   };
 
+    const handleExportClassExcel = () => {
+      if (!monthlyReportData || !reportMetadata) {
+          alert("Tidak ada data laporan untuk diekspor. Harap tampilkan laporan terlebih dahulu.");
+          return;
+      }
+
+      const { className, monthName, year } = reportMetadata;
+      
+      const wb = XLSX.utils.book_new();
+      const sheetData: any[][] = [];
+      const merges: any[] = [];
+      let currentRow = 0;
+      const numCols = HABIT_NAMES.length + 2;
+
+      // Add main headers and configure merges
+      sheetData.push(['Laporan Rekapitulasi Pemantauan Kebiasaan Siswa']);
+      merges.push({ s: { r: currentRow, c: 0 }, e: { r: currentRow, c: numCols - 1 } });
+      currentRow++;
+      
+      sheetData.push([`Bulan: ${monthName} ${year}`]);
+      merges.push({ s: { r: currentRow, c: 0 }, e: { r: currentRow, c: numCols - 1 } });
+      currentRow++;
+
+      sheetData.push([`Kelas: ${className}`, '', `Guru: ${user.name}`]);
+      merges.push({ s: { r: currentRow, c: 0 }, e: { r: currentRow, c: 1 } });
+      currentRow++;
+      
+      sheetData.push([]); // Spacer
+      currentRow++;
+
+      // Add data for each day
+      monthlyReportData.forEach(dailyData => {
+          if (dailyData.studentRecords.length > 0) {
+              sheetData.push([`TANGGAL ${dailyData.day}`]);
+              merges.push({ s: { r: currentRow, c: 0 }, e: { r: currentRow, c: numCols - 1 } });
+              currentRow++;
+              
+              const headerRow = ['No', 'Nama Peserta Didik', ...HABIT_NAMES];
+              sheetData.push(headerRow);
+              currentRow++;
+
+              dailyData.studentRecords.forEach((record, index) => {
+                  const studentRow = [
+                      index + 1,
+                      record.studentName,
+                      ...HABIT_NAMES.map(habit => record.habits[habit])
+                  ];
+                  sheetData.push(studentRow);
+                  currentRow++;
+              });
+              sheetData.push([]); // Spacer between days
+              currentRow++;
+          }
+      });
+
+      sheetData.push(['Keterangan: Angka dalam tabel merupakan nilai/skor kebiasaan harian (skala 1-5).']);
+      merges.push({ s: { r: currentRow, c: 0 }, e: { r: currentRow, c: numCols - 1 } });
+
+      const ws = XLSX.utils.aoa_to_sheet(sheetData);
+      ws['!merges'] = merges;
+
+      // Set column widths
+      const colWidths = [
+          { wch: 5 }, // No
+          { wch: 30 }, // Nama
+          ...HABIT_NAMES.map(() => ({ wch: 18 })) // Habits
+      ];
+      ws['!cols'] = colWidths;
+
+      XLSX.utils.book_append_sheet(wb, ws, `Laporan ${monthName} ${year}`);
+
+      const fileName = `laporan-harian-kelas-${className.replace(/\s/g, '_')}-${monthName}-${year}.xlsx`;
+      XLSX.writeFile(wb, fileName);
+  };
+
+
   const selectedRecord = records.find(r => r.studentId === selectedStudentId && r.date === selectedDate) || null;
   const selectedStudent = students.find(s => s.id === selectedStudentId);
 
@@ -521,8 +598,15 @@ const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ user, onLogout }) =
                                         <p><strong>Keterangan:</strong> Angka dalam tabel merupakan nilai/skor kebiasaan harian (skala 1-5).</p>
                                     </div>
                                 </div>
-                                <div className="text-center">
+                                <div className="text-center flex justify-center gap-4">
                                     <Button onClick={handleExportClassPdf} variant="secondary">Ekspor Laporan Kelas (PDF)</Button>
+                                    <Button 
+                                        onClick={handleExportClassExcel} 
+                                        variant="secondary" 
+                                        className="!bg-green-600 hover:!bg-green-700 focus:!ring-green-500"
+                                    >
+                                        Ekspor Laporan Kelas (Excel)
+                                    </Button>
                                 </div>
                             </div>
                         )}
