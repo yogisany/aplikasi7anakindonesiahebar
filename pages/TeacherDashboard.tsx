@@ -9,7 +9,7 @@ import HabitChart from '../components/HabitChart';
 import PlusIcon from '../components/icons/PlusIcon';
 import EditIcon from '../components/icons/EditIcon';
 import TrashIcon from '../components/icons/TrashIcon';
-import { HABIT_NAMES, RATING_MAP, RATING_OPTIONS } from '../constants';
+import { HABIT_NAMES, RATING_MAP, RATING_OPTIONS, RATING_DESCRIPTION_MAP } from '../constants';
 
 // Declare jspdf and html2canvas from global scope
 declare const jspdf: any;
@@ -18,7 +18,7 @@ declare const XLSX: any;
 
 interface DailyStudentRecord {
   studentName: string;
-  habits: Record<Habit, RatingValue | '-'>;
+  habits: Record<Habit, Rating | '-'>;
 }
 
 interface DailyReport {
@@ -291,11 +291,21 @@ const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ user, onLogout }) =
           
           const studentRecords: DailyStudentRecord[] = students.map(student => {
               const studentRecord = recordsForDay[student.id];
-              const habits: Record<Habit, RatingValue | '-'> = {} as any;
+              const habits: Record<Habit, Rating | '-'> = {} as any;
               
               HABIT_NAMES.forEach(habitName => {
-                  if (studentRecord && studentRecord.habits[habitName]) {
-                      habits[habitName] = RATING_MAP[studentRecord.habits[habitName]];
+                  const rawValue = studentRecord?.habits[habitName];
+                  // FIX: The type of `rawValue` is `Rating`, which doesn't include '-'.
+                  // The comparison against `'-'` caused a type error. `if (rawValue)` is sufficient.
+                  if (rawValue) {
+                      // Attempt to treat it as a number first
+                      const numericValue = Number(rawValue);
+                      if (!isNaN(numericValue) && numericValue >= 1 && numericValue <= 5) {
+                          habits[habitName] = RATING_DESCRIPTION_MAP[numericValue as RatingValue];
+                      } else {
+                          // If it's not a valid number, assume it's already the description string
+                          habits[habitName] = rawValue as Rating;
+                      }
                   } else {
                       habits[habitName] = '-';
                   }
@@ -407,29 +417,6 @@ const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ user, onLogout }) =
           }
       });
 
-      sheetData.push(['Keterangan: Angka dalam tabel merupakan nilai/skor kebiasaan harian (skala 1-5).']);
-      merges.push({ s: { r: currentRow, c: 0 }, e: { r: currentRow, c: numCols - 1 } });
-      currentRow++;
-      
-      const legend = [
-        [], // Spacer
-        ['Arti Nilai Skala:'],
-        ['5 = Sudah Terbiasa'],
-        ['4 = Terbiasa'],
-        ['3 = Belum Terbiasa'],
-        ['2 = Kurang Terbiasa'],
-        ['1 = Sangat Tidak Terbiasa'],
-      ];
-
-      legend.forEach(row => {
-          sheetData.push(row);
-          if(row.length > 0) {
-            merges.push({ s: { r: currentRow, c: 0 }, e: { r: currentRow, c: numCols - 1 } });
-          }
-          currentRow++;
-      });
-
-
       const ws = XLSX.utils.aoa_to_sheet(sheetData);
       ws['!merges'] = merges;
 
@@ -437,7 +424,7 @@ const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ user, onLogout }) =
       const colWidths = [
           { wch: 5 }, // No
           { wch: 30 }, // Nama
-          ...HABIT_NAMES.map(() => ({ wch: 18 })) // Habits
+          ...HABIT_NAMES.map(() => ({ wch: 25 })) // Habits
       ];
       ws['!cols'] = colWidths;
 
@@ -605,7 +592,7 @@ const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ user, onLogout }) =
                                                             <th className="p-2 border border-gray-300">No</th>
                                                             <th className="p-2 border border-gray-300" style={{minWidth: '150px'}}>Nama Peserta Didik</th>
                                                             {HABIT_NAMES.map(habit => (
-                                                                <th key={habit} className="p-2 border border-gray-300 whitespace-nowrap">{habit.replace(' ', '\n')}</th>
+                                                                <th key={habit} className="p-2 border border-gray-300">{habit.replace(' ', '\n')}</th>
                                                             ))}
                                                         </tr>
                                                     </thead>
@@ -613,7 +600,7 @@ const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ user, onLogout }) =
                                                         {dailyData.studentRecords.map((data, index) => (
                                                             <tr key={index} className="border-b hover:bg-gray-50">
                                                                 <td className="p-2 border border-gray-300 text-center">{index + 1}</td>
-                                                                <td className="p-2 border border-gray-300 font-medium whitespace-nowrap">{data.studentName}</td>
+                                                                <td className="p-2 border border-gray-300 font-medium">{data.studentName}</td>
                                                                 {HABIT_NAMES.map(habit => (
                                                                     <td key={habit} className="p-2 border border-gray-300 text-center">
                                                                         {data.habits[habit]}
@@ -627,19 +614,6 @@ const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ user, onLogout }) =
                                         </div>
                                     ))}
                                     {monthlyReportData.length === 0 && <p className="text-center text-gray-500 py-4">Tidak ada data ditemukan untuk periode ini.</p>}
-                                    <div className="mt-6 text-xs text-gray-600">
-                                        <p><strong>Keterangan:</strong> Angka dalam tabel merupakan nilai/skor kebiasaan harian.</p>
-                                        <div className="mt-2 p-2 border rounded-md bg-gray-50">
-                                            <p className="font-bold">Arti Nilai Skala:</p>
-                                            <ul className="list-none pl-0">
-                                                <li><strong>5</strong> = Sudah Terbiasa</li>
-                                                <li><strong>4</strong> = Terbiasa</li>
-                                                <li><strong>3</strong> = Belum Terbiasa</li>
-                                                <li><strong>2</strong> = Kurang Terbiasa</li>
-                                                <li><strong>1</strong> = Sangat Tidak Terbiasa</li>
-                                            </ul>
-                                        </div>
-                                    </div>
                                 </div>
                                 <div className="text-center flex justify-center gap-4">
                                     <Button onClick={handleExportClassPdf} variant="secondary">Ekspor Laporan Kelas (PDF)</Button>

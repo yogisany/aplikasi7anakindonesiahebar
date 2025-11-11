@@ -27,6 +27,15 @@ export const RATING_MAP: Record<Rating, RatingValue> = {
   "Sudah Terbiasa": 5,
 };
 
+export const RATING_DESCRIPTION_MAP: Record<RatingValue, Rating> = {
+  1: "Sangat Tidak Terbiasa",
+  2: "Kurang Terbiasa",
+  3: "Belum Terbiasa",
+  4: "Terbiasa",
+  5: "Sudah Terbiasa",
+};
+
+
 export const MAPPED_RATINGS: { name: Rating; value: RatingValue }[] = RATING_OPTIONS.map(option => ({
     name: option,
     value: RATING_MAP[option],
