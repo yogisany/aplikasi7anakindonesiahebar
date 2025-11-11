@@ -15,9 +15,16 @@ declare const jspdf: any;
 declare const html2canvas: any;
 declare const XLSX: any;
 
-interface RecapData {
+interface MonthlyReportDetails {
     student: Student;
-    averageHabits: Record<Habit, number | null>;
+    daysInMonth: number;
+    monthName: string;
+    year: number;
+}
+
+interface MonthlyHabitData {
+    habit: Habit;
+    ratings: (number | null)[];
 }
 
 interface TeacherDashboardProps {
@@ -44,18 +51,15 @@ const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ user, onLogout }) =
       return initialHabits;
   });
   
-  // Recap State
-  const [recapType, setRecapType] = useState<'daily' | 'weekly' | 'monthly'>('daily');
-  const [recapDate, setRecapDate] = useState(new Date().toISOString().split('T')[0]);
-  const [recapWeekStart, setRecapWeekStart] = useState('');
-  const [recapWeekEnd, setRecapWeekEnd] = useState('');
+  // Recap State for new monthly report per student
   const [recapMonth, setRecapMonth] = useState(new Date().toISOString().substring(0, 7)); // YYYY-MM
-  const [recapData, setRecapData] = useState<RecapData[] | null>(null);
-  const [recapTitle, setRecapTitle] = useState('');
+  const [recapSelectedStudentId, setRecapSelectedStudentId] = useState<string>('');
+  const [monthlyReportDetails, setMonthlyReportDetails] = useState<MonthlyReportDetails | null>(null);
+  const [monthlyStudentData, setMonthlyStudentData] = useState<MonthlyHabitData[] | null>(null);
 
 
   const reportRef = useRef<HTMLDivElement>(null);
-  const recapReportRef = useRef<HTMLDivElement>(null);
+  const monthlyReportRef = useRef<HTMLDivElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const fetchStudents = useCallback(() => {
@@ -71,17 +75,6 @@ const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ user, onLogout }) =
   useEffect(() => {
     fetchStudents();
     fetchRecords();
-
-    // Set default weekly range
-    const today = new Date();
-    const day = today.getDay();
-    const diffStart = today.getDate() - day + (day === 0 ? -6 : 1); // adjust when day is sunday
-    const startDate = new Date(new Date().setDate(diffStart));
-    const endDate = new Date(new Date().setDate(startDate.getDate() + 6));
-    
-    setRecapWeekStart(startDate.toISOString().split('T')[0]);
-    setRecapWeekEnd(endDate.toISOString().split('T')[0]);
-
   }, [fetchStudents, fetchRecords]);
 
   useEffect(() => {
@@ -257,108 +250,82 @@ const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ user, onLogout }) =
     }
   };
 
-  // Recap Handlers
-  const handleGenerateRecap = () => {
-      let startDate: string, endDate: string;
-      let title = '';
-      const fullDateFormat: Intl.DateTimeFormatOptions = { timeZone: 'UTC', day: '2-digit', month: 'long', year: 'numeric' };
-
-      switch(recapType) {
-          case 'daily':
-              startDate = endDate = recapDate;
-              title = `Laporan Harian - ${new Date(recapDate).toLocaleDateString('id-ID', fullDateFormat)}`;
-              break;
-          case 'weekly':
-              if (!recapWeekStart || !recapWeekEnd) {
-                alert("Silakan tentukan tanggal mulai dan selesai untuk laporan.");
-                return;
-              }
-              if (new Date(recapWeekStart) > new Date(recapWeekEnd)) {
-                  alert("Tanggal mulai tidak boleh lebih akhir dari tanggal selesai.");
-                  return;
-              }
-              startDate = recapWeekStart;
-              endDate = recapWeekEnd;
-              const formattedWeekStart = new Date(startDate).toLocaleDateString('id-ID', fullDateFormat);
-              const formattedWeekEnd = new Date(endDate).toLocaleDateString('id-ID', fullDateFormat);
-              title = `Laporan Mingguan (${formattedWeekStart} - ${formattedWeekEnd})`;
-              break;
-          case 'monthly':
-              const year = parseInt(recapMonth.split('-')[0]);
-              const month = parseInt(recapMonth.split('-')[1]);
-              startDate = `${recapMonth}-01`;
-              const lastDay = new Date(year, month, 0).getDate();
-              endDate = `${recapMonth}-${lastDay}`;
-              const formattedMonthStart = new Date(startDate).toLocaleDateString('id-ID', fullDateFormat);
-              const formattedMonthEnd = new Date(endDate).toLocaleDateString('id-ID', fullDateFormat);
-              title = `Laporan Bulanan (${formattedMonthStart} - ${formattedMonthEnd})`;
-              break;
+  // Recap Handlers - NEW LOGIC
+  const handleGenerateMonthlyReport = () => {
+      const student = students.find(s => s.id === recapSelectedStudentId);
+      if (!student) {
+          alert("Silakan pilih siswa terlebih dahulu.");
+          setMonthlyStudentData(null);
+          setMonthlyReportDetails(null);
+          return;
       }
-      setRecapTitle(title);
 
-      const studentIds = students.map(s => s.id);
-      const relevantRecords = records.filter(r => 
-          studentIds.includes(r.studentId) && r.date >= startDate && r.date <= endDate
+      const [year, month] = recapMonth.split('-').map(Number);
+      const daysInMonth = new Date(year, month, 0).getDate();
+      const monthName = new Date(year, month - 1, 1).toLocaleString('id-ID', { month: 'long' });
+
+      setMonthlyReportDetails({ student, daysInMonth, monthName, year });
+
+      const studentRecordsForMonth = records.filter(r => 
+          r.studentId === recapSelectedStudentId && r.date.startsWith(recapMonth)
       );
-      
-      const aggregation = students.map(student => {
-          const studentRecords = relevantRecords.filter(r => r.studentId === student.id);
-          const habitTotals: Record<Habit, { total: number, count: number }> = {} as any;
-          
-          HABIT_NAMES.forEach(habit => {
-              habitTotals[habit] = { total: 0, count: 0 };
-          });
 
-          studentRecords.forEach(record => {
-              HABIT_NAMES.forEach(habit => {
-                  if (record.habits[habit]) {
-                      habitTotals[habit].total += RATING_MAP[record.habits[habit]];
-                      habitTotals[habit].count += 1;
-                  }
-              });
-          });
+      const recordsByDate: { [key: string]: HabitRecord } = {};
+      studentRecordsForMonth.forEach(r => {
+          recordsByDate[r.date] = r;
+      });
 
-          const averageHabits: Record<Habit, number | null> = {} as any;
-          HABIT_NAMES.forEach(habit => {
-              averageHabits[habit] = habitTotals[habit].count > 0 ? habitTotals[habit].total / habitTotals[habit].count : null;
-          });
-
-          return { student, averageHabits };
+      const reportData: MonthlyHabitData[] = HABIT_NAMES.map(habit => {
+          const ratings: (number | null)[] = [];
+          for (let day = 1; day <= daysInMonth; day++) {
+              const dateStr = `${recapMonth}-${String(day).padStart(2, '0')}`;
+              const record = recordsByDate[dateStr];
+              if (record && record.habits[habit]) {
+                  ratings.push(RATING_MAP[record.habits[habit]]);
+              } else {
+                  ratings.push(null);
+              }
+          }
+          return { habit, ratings };
       });
       
-      setRecapData(aggregation);
+      setMonthlyStudentData(reportData);
   };
   
-  const handleExportRecapPdf = async () => {
-      if (!recapReportRef.current) {
-          alert("Tidak ada data rekap untuk diekspor.");
+  const handleExportMonthlyPdf = async () => {
+      if (!monthlyReportRef.current || !monthlyReportDetails) {
+          alert("Tidak ada data laporan untuk diekspor. Harap tampilkan laporan terlebih dahulu.");
           return;
       }
       try {
+          const { student, monthName, year } = monthlyReportDetails;
           const { jsPDF } = jspdf;
-          const canvas = await html2canvas(recapReportRef.current, { scale: 2 });
+          const canvas = await html2canvas(monthlyReportRef.current, { scale: 2 });
           const imgData = canvas.toDataURL('image/png');
+          
           const pdf = new jsPDF('l', 'mm', 'a4'); // landscape
           const pdfWidth = pdf.internal.pageSize.getWidth();
-          const pdfHeight = (canvas.height * pdfWidth) / canvas.width;
+          const pdfHeight = pdf.internal.pageSize.getHeight();
+          const imgWidth = canvas.width;
+          const imgHeight = canvas.height;
+          const ratio = imgWidth / imgHeight;
+          let finalImgWidth = pdfWidth - 20; // with margin
+          let finalImgHeight = finalImgWidth / ratio;
           
-          pdf.addImage(imgData, 'PNG', 10, 10, pdfWidth - 20, pdfHeight - 20);
-          pdf.save(`rekap-${recapType}-${recapDate}.pdf`);
-      } catch (error) {
-          console.error("Error exporting recap PDF:", error);
-          alert("Gagal mengekspor PDF rekap.");
-      }
-  };
+          if (finalImgHeight > pdfHeight - 20) {
+            finalImgHeight = pdfHeight - 20;
+            finalImgWidth = finalImgHeight * ratio;
+          }
 
-  const getRatingTextFromScore = (score: number | null): string => {
-    if (score === null || score === undefined) {
-        return '-';
-    }
-    const roundedScore = Math.round(score);
-    if (roundedScore >= 1 && roundedScore <= 5) {
-        return RATING_OPTIONS[roundedScore - 1];
-    }
-    return '-';
+          const xPos = (pdfWidth - finalImgWidth) / 2;
+          const yPos = (pdfHeight - finalImgHeight) / 2;
+          
+          pdf.addImage(imgData, 'PNG', xPos, yPos, finalImgWidth, finalImgHeight);
+          pdf.save(`laporan-bulanan-${student.name.replace(/\s/g, '_')}-${monthName}-${year}.pdf`);
+      } catch (error) {
+          console.error("Error exporting monthly PDF:", error);
+          alert("Gagal mengekspor PDF Laporan Bulanan.");
+      }
   };
 
   const selectedRecord = records.find(r => r.studentId === selectedStudentId && r.date === selectedDate) || null;
@@ -474,85 +441,68 @@ const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ user, onLogout }) =
                 )}
                 {activeTab === 'recap' && (
                     <div className="space-y-6">
-                        <h2 className="text-xl font-semibold text-primary-700">Rekapitulasi Laporan Kebiasaan</h2>
+                        <h2 className="text-xl font-semibold text-primary-700">Laporan Bulanan per Peserta Didik</h2>
                         <div className="flex flex-wrap gap-4 items-end p-4 border rounded-lg bg-primary-50">
                             <div>
-                                <label className="block text-sm font-medium text-gray-700">Jenis Laporan</label>
-                                <select value={recapType} onChange={e => setRecapType(e.target.value as any)} className="mt-1 block w-full pl-3 pr-10 py-2 text-base border-gray-300 focus:outline-none focus:ring-primary-500 focus:border-primary-500 sm:text-sm rounded-md">
-                                    <option value="daily">Harian</option>
-                                    <option value="weekly">Mingguan</option>
-                                    <option value="monthly">Bulanan</option>
+                               <label htmlFor="recap-student-select" className="block text-sm font-medium text-gray-700">Pilih Peserta Didik</label>
+                                <select id="recap-student-select" value={recapSelectedStudentId} onChange={e => setRecapSelectedStudentId(e.target.value)} className="mt-1 block w-full pl-3 pr-10 py-2 text-base border-gray-300 focus:outline-none focus:ring-primary-500 focus:border-primary-500 sm:text-sm rounded-md">
+                                    <option value="">-- Pilih Siswa --</option>
+                                    {students.map(s => <option key={s.id} value={s.id}>{s.name} - {s.class}</option>)}
                                 </select>
                             </div>
-                            
-                            {recapType === 'daily' && (
-                                <div>
-                                    <label className="block text-sm font-medium text-gray-700">Pilih Tanggal</label>
-                                    <input type="date" value={recapDate} onChange={e => setRecapDate(e.target.value)} className="mt-1 block w-full pl-3 pr-4 py-2 text-base border-gray-300 focus:outline-none focus:ring-primary-500 focus:border-primary-500 sm:text-sm rounded-md"/>
-                                </div>
-                            )}
-
-                            {recapType === 'weekly' && (
-                                <>
-                                    <div>
-                                        <label className="block text-sm font-medium text-gray-700">Dari Tanggal</label>
-                                        <input type="date" value={recapWeekStart} onChange={e => setRecapWeekStart(e.target.value)} className="mt-1 block w-full pl-3 pr-4 py-2 text-base border-gray-300 focus:outline-none focus:ring-primary-500 focus:border-primary-500 sm:text-sm rounded-md"/>
-                                    </div>
-                                    <div>
-                                        <label className="block text-sm font-medium text-gray-700">Sampai Tanggal</label>
-                                        <input type="date" value={recapWeekEnd} onChange={e => setRecapWeekEnd(e.target.value)} className="mt-1 block w-full pl-3 pr-4 py-2 text-base border-gray-300 focus:outline-none focus:ring-primary-500 focus:border-primary-500 sm:text-sm rounded-md"/>
-                                    </div>
-                                </>
-                            )}
-                            
-                            {recapType === 'monthly' && (
-                                <div>
-                                    <label className="block text-sm font-medium text-gray-700">Pilih Bulan</label>
-                                    <input type="month" value={recapMonth} onChange={e => setRecapMonth(e.target.value)} className="mt-1 block w-full pl-3 pr-4 py-2 text-base border-gray-300 focus:outline-none focus:ring-primary-500 focus:border-primary-500 sm:text-sm rounded-md"/>
-                                </div>
-                            )}
-
-                            <Button onClick={handleGenerateRecap}>Tampilkan Rekap</Button>
+                            <div>
+                                <label className="block text-sm font-medium text-gray-700">Pilih Bulan</label>
+                                <input type="month" value={recapMonth} onChange={e => setRecapMonth(e.target.value)} className="mt-1 block w-full pl-3 pr-4 py-2 text-base border-gray-300 focus:outline-none focus:ring-primary-500 focus:border-primary-500 sm:text-sm rounded-md"/>
+                            </div>
+                            <Button onClick={handleGenerateMonthlyReport}>Tampilkan Laporan</Button>
                         </div>
                         
-                        {recapData && (
+                        {monthlyStudentData && monthlyReportDetails && (
                             <div className="space-y-4">
-                                <div ref={recapReportRef} className="p-4 sm:p-6 bg-white border">
-                                    <h3 className="text-xl font-bold text-center text-primary-800 mb-1">{user.name}</h3>
-                                    <p className="text-center text-gray-600 mb-4">Guru Kelas</p>
-                                    <h4 className="text-lg font-semibold text-center text-gray-800 mb-4">{recapTitle}</h4>
+                                <div ref={monthlyReportRef} className="p-4 sm:p-6 bg-white border" style={{minWidth: '1200px'}}>
+                                    <h3 className="text-xl font-bold text-center text-primary-800 mb-1">Laporan Pemantauan Kebiasaan Siswa</h3>
+                                    <h4 className="text-lg font-semibold text-center text-gray-800">Bulan: {monthlyReportDetails.monthName} {monthlyReportDetails.year}</h4>
+                                    <div className="flex justify-between my-4 text-sm">
+                                      <p><strong>Nama:</strong> {monthlyReportDetails.student.name}</p>
+                                      <p><strong>Kelas:</strong> {monthlyReportDetails.student.class}</p>
+                                      <p><strong>NISN:</strong> {monthlyReportDetails.student.nisn}</p>
+                                    </div>
                                     <div className="overflow-x-auto">
-                                        <table className="w-full text-left text-sm">
+                                        <table className="w-full text-left text-xs border-collapse border border-gray-300">
                                             <thead className="bg-primary-100">
-                                                <tr>
-                                                    <th className="p-2">No</th>
-                                                    <th className="p-2">Nama</th>
-                                                    <th className="p-2">NISN</th>
-                                                    <th className="p-2">Kelas</th>
-                                                    {HABIT_NAMES.map(h => <th key={h} className="p-2 text-center whitespace-nowrap">{h}</th>)}
+                                                <tr className="text-center">
+                                                    <th className="p-2 border border-gray-300">No</th>
+                                                    <th className="p-2 border border-gray-300" style={{minWidth: '120px'}}>Kebiasaan</th>
+                                                    {Array.from({ length: monthlyReportDetails.daysInMonth }, (_, i) => i + 1).map(day => (
+                                                        <th key={day} className="p-2 border border-gray-300 w-8">{day}</th>
+                                                    ))}
                                                 </tr>
                                             </thead>
                                             <tbody>
-                                                {recapData.map((data, index) => (
-                                                    <tr key={data.student.id} className="border-b hover:bg-gray-50">
-                                                        <td className="p-2">{index + 1}</td>
-                                                        <td className="p-2 whitespace-nowrap">{data.student.name}</td>
-                                                        <td className="p-2">{data.student.nisn}</td>
-                                                        <td className="p-2">{data.student.class}</td>
-                                                        {HABIT_NAMES.map(h => (
-                                                            <td key={h} className="p-2 text-center whitespace-nowrap">
-                                                                {getRatingTextFromScore(data.averageHabits[h])}
+                                                {monthlyStudentData.map((data, index) => (
+                                                    <tr key={data.habit} className="border-b hover:bg-gray-50">
+                                                        <td className="p-2 border border-gray-300 text-center">{index + 1}</td>
+                                                        <td className="p-2 border border-gray-300 font-medium whitespace-nowrap">{data.habit}</td>
+                                                        {data.ratings.map((rating, dayIndex) => (
+                                                            <td key={dayIndex} className="p-2 border border-gray-300 text-center">
+                                                                {rating !== null ? rating : '-'}
                                                             </td>
                                                         ))}
                                                     </tr>
                                                 ))}
                                             </tbody>
                                         </table>
-                                        {recapData.length === 0 && <p className="text-center text-gray-500 py-4">Tidak ada data ditemukan untuk periode ini.</p>}
+                                        {monthlyStudentData.length === 0 && <p className="text-center text-gray-500 py-4">Tidak ada data ditemukan untuk periode ini.</p>}
+                                    </div>
+                                    <div className="mt-4 text-xs text-gray-600">
+                                        <p><strong>Keterangan Skor:</strong></p>
+                                        <ul className="list-disc list-inside">
+                                          {RATING_OPTIONS.map((opt, idx) => <li key={opt}><strong>{idx+1}:</strong> {opt}</li>)}
+                                        </ul>
                                     </div>
                                 </div>
                                 <div className="text-center">
-                                    <Button onClick={handleExportRecapPdf} variant="secondary">Ekspor PDF</Button>
+                                    <Button onClick={handleExportMonthlyPdf} variant="secondary">Ekspor Laporan (PDF)</Button>
                                 </div>
                             </div>
                         )}
