@@ -232,29 +232,6 @@ const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ user, onLogout }) =
       alert("Data kebiasaan berhasil disimpan!");
   };
 
-  const handleExportPdf = async () => {
-    const selectedStudent = students.find(s => s.id === selectedStudentId);
-    if (!reportRef.current || !selectedStudent) {
-        alert("Pilih siswa dan pastikan ada data untuk diekspor.");
-        return;
-    }
-    
-    try {
-        const { jsPDF } = jspdf;
-        const canvas = await html2canvas(reportRef.current, { scale: 2 });
-        const imgData = canvas.toDataURL('image/png');
-        const pdf = new jsPDF('p', 'mm', 'a4');
-        const pdfWidth = pdf.internal.pageSize.getWidth();
-        const pdfHeight = (canvas.height * pdfWidth) / canvas.width;
-        
-        pdf.addImage(imgData, 'PNG', 0, 0, pdfWidth, pdfHeight);
-        pdf.save(`rekap-kebiasaan-${selectedStudent.name.replace(/\s/g, '_')}-${selectedDate}.pdf`);
-    } catch (error) {
-        console.error("Error exporting PDF:", error);
-        alert("Gagal mengekspor PDF.");
-    }
-  };
-
   // Recap Handlers - NEW DAILY REPORT LOGIC
   const handleGenerateClassReport = () => {
       if (students.length === 0) {
@@ -554,7 +531,6 @@ const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ user, onLogout }) =
                          {selectedStudentId && (
                              <div className="flex flex-col sm:flex-row justify-end gap-4 pt-4">
                                 <Button onClick={handleHabitSubmit}>Simpan Data Kebiasaan</Button>
-                                <Button onClick={handleExportPdf} variant="secondary">Ekspor Rekap Harian (PDF)</Button>
                             </div>
                          )}
                     </div>
