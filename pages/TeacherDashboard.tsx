@@ -573,7 +573,7 @@ const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ user, onLogout }) =
                             <div className="p-6 border rounded-lg shadow-sm bg-primary-50">
                                 <h3 className="text-xl font-semibold mb-4 text-primary-800">Scan QRIS</h3>
                                 <img 
-                                    src="https://i.ibb.co/L8yC9D0/qris-placeholder.png"
+                                    src="https://saweria.co/widgets/qr?streamKey=0597509df18cd735a259a5f06c01380d"
                                     alt="QRIS Code for Donation" 
                                     className="w-48 h-48 mx-auto" 
                                 />
@@ -583,8 +583,8 @@ const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ user, onLogout }) =
                                 <h3 className="text-xl font-semibold mb-4 text-gray-800">Transfer Bank</h3>
                                 <div className="text-left space-y-3">
                                     <p><strong>Bank:</strong> Bank Central Asia (BCA)</p>
-                                    <p><strong>No. Rekening:</strong> 1234567890</p>
-                                    <p><strong>Atas Nama:</strong> Pengembang Aplikasi Hebat</p>
+                                    <p><strong>No. Rekening:</strong> 1393738034</p>
+                                    <p><strong>Atas Nama:</strong> Yogi Sany</p>
                                 </div>
                             </div>
                         </div>
