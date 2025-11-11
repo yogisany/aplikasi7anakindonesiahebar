@@ -41,7 +41,7 @@ const LoginPage: React.FC<LoginPageProps> = ({ onLogin }) => {
         {/* Form Section */}
         <div className="w-full md:w-1/2 p-8 sm:p-12 flex flex-col justify-center">
           <div className="text-center mb-8">
-             <h1 className="text-3xl md:text-4xl font-bold text-primary-800">7 Kebiasaan Anak Indonesia Hebat</h1>
+             <h1 className="text-3xl md:text-4xl font-bold text-primary-800">Aplikasi Pemantauan 7 Kebiasaan Anak Indonesia Hebat</h1>
              <p className="mt-2 text-gray-500">Welcome Onboard</p>
           </div>
           
