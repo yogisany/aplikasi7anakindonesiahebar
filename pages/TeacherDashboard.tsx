@@ -383,6 +383,7 @@ const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ user, onLogout }) =
                     <button onClick={() => setActiveTab('students')} className={`${activeTab === 'students' ? 'border-primary-500 text-primary-600' : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'} whitespace-nowrap py-4 px-1 border-b-2 font-medium text-sm`}>Manajemen Peserta Didik</button>
                     <button onClick={() => setActiveTab('tracker')} className={`${activeTab === 'tracker' ? 'border-primary-500 text-primary-600' : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'} whitespace-nowrap py-4 px-1 border-b-2 font-medium text-sm`}>Input & Grafik</button>
                     <button onClick={() => setActiveTab('recap')} className={`${activeTab === 'recap' ? 'border-primary-500 text-primary-600' : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'} whitespace-nowrap py-4 px-1 border-b-2 font-medium text-sm`}>Rekap & Ekspor</button>
+                    <button onClick={() => setActiveTab('donation')} className={`${activeTab === 'donation' ? 'border-primary-500 text-primary-600' : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'} whitespace-nowrap py-4 px-1 border-b-2 font-medium text-sm`}>Donasi</button>
                 </nav>
             </div>
             
@@ -560,6 +561,36 @@ const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ user, onLogout }) =
                                 </div>
                             </div>
                         )}
+                    </div>
+                )}
+                 {activeTab === 'donation' && (
+                    <div className="space-y-6 text-center max-w-3xl mx-auto">
+                        <h2 className="text-2xl font-bold text-primary-700">Dukung Pengembangan Aplikasi</h2>
+                        <p className="text-gray-600">
+                            Aplikasi ini dikembangkan secara independen dan gratis untuk digunakan. Dukungan Anda sangat berarti bagi kami untuk terus melakukan pemeliharaan, perbaikan, dan penambahan fitur-fitur baru yang bermanfaat bagi dunia pendidikan.
+                        </p>
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-8 pt-4">
+                            <div className="p-6 border rounded-lg shadow-sm bg-primary-50">
+                                <h3 className="text-xl font-semibold mb-4 text-primary-800">Scan QRIS</h3>
+                                <img 
+                                    src="https://i.ibb.co/L8yC9D0/qris-placeholder.png"
+                                    alt="QRIS Code for Donation" 
+                                    className="w-48 h-48 mx-auto" 
+                                />
+                                <p className="text-sm mt-2 text-gray-500">Mendukung semua E-Wallet dan Mobile Banking.</p>
+                            </div>
+                            <div className="p-6 border rounded-lg shadow-sm bg-gray-50">
+                                <h3 className="text-xl font-semibold mb-4 text-gray-800">Transfer Bank</h3>
+                                <div className="text-left space-y-3">
+                                    <p><strong>Bank:</strong> Bank Central Asia (BCA)</p>
+                                    <p><strong>No. Rekening:</strong> 1234567890</p>
+                                    <p><strong>Atas Nama:</strong> Pengembang Aplikasi Hebat</p>
+                                </div>
+                            </div>
+                        </div>
+                        <p className="text-lg font-semibold text-gray-700 pt-6">
+                            Terima kasih atas dukungan dan kebaikan Anda!
+                        </p>
                     </div>
                 )}
             </div>
