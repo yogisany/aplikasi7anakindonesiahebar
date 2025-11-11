@@ -31,7 +31,7 @@ const LoginPage: React.FC<LoginPageProps> = ({ onLogin }) => {
       <div className="w-full max-w-4xl mx-auto bg-white shadow-2xl rounded-2xl flex overflow-hidden">
         {/* Left Side - Illustration */}
         <div className="hidden md:flex md:w-1/2 bg-primary-200 p-8 flex-col justify-center items-center text-center text-primary-800">
-           <img src="https://storage.googleapis.com/project-os-prod/images/3a9a888c-4235-4422-9426-243574c3e39c.jpeg" alt="Ilustrasi Anak Sekolah Dasar" className="w-full max-w-md rounded-lg shadow-lg" />
+           <img src="https://storage.googleapis.com/project-os-prod/images/845191f2-1a7f-473d-854c-1d98939c065f.jpeg" alt="Ilustrasi Anak Sekolah Dasar" className="w-full max-w-md rounded-lg shadow-lg" />
            <h1 className="text-3xl font-bold mt-6">7 Kebiasaan Anak Hebat</h1>
            <p className="mt-2 text-primary-700">Membentuk Generasi Unggul Sejak Dini</p>
         </div>
