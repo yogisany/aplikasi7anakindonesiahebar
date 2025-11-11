@@ -64,7 +64,6 @@ const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ user, onLogout }) =
 
 
   const reportRef = useRef<HTMLDivElement>(null);
-  const monthlyReportRef = useRef<HTMLDivElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const fetchStudents = useCallback(() => {
@@ -298,48 +297,6 @@ const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ user, onLogout }) =
       setMonthlyReportData(fullReport);
   };
   
-  const handleExportClassPdf = async () => {
-      if (!monthlyReportRef.current || !reportMetadata) {
-          alert("Tidak ada data laporan untuk diekspor. Harap tampilkan laporan terlebih dahulu.");
-          return;
-      }
-      try {
-          const { className, monthName, year } = reportMetadata;
-          const { jsPDF } = jspdf;
-          const canvas = await html2canvas(monthlyReportRef.current, { scale: 2 });
-          const imgData = canvas.toDataURL('image/png');
-          
-          const pdf = new jsPDF('p', 'mm', 'a4'); // portrait
-          const pdfWidth = pdf.internal.pageSize.getWidth();
-          const pdfHeight = pdf.internal.pageSize.getHeight();
-
-          const canvasWidth = canvas.width;
-          const canvasHeight = canvas.height;
-          
-          const ratio = canvasWidth / canvasHeight;
-          const imgWidth = pdfWidth - 20; // with margin
-          const imgHeight = imgWidth / ratio;
-          
-          let heightLeft = imgHeight;
-          let position = 10; // top margin
-
-          pdf.addImage(imgData, 'PNG', 10, position, imgWidth, imgHeight);
-          heightLeft -= (pdfHeight - 20);
-
-          while (heightLeft > 0) {
-              position = -heightLeft - 10;
-              pdf.addPage();
-              pdf.addImage(imgData, 'PNG', 10, position, imgWidth, imgHeight);
-              heightLeft -= (pdfHeight - 20);
-          }
-
-          pdf.save(`laporan-harian-kelas-${className.replace(/\s/g, '_')}-${monthName}-${year}.pdf`);
-      } catch (error) {
-          console.error("Error exporting monthly PDF:", error);
-          alert("Gagal mengekspor PDF Laporan Bulanan.");
-      }
-  };
-
     const handleExportClassExcel = () => {
       if (!monthlyReportData || !reportMetadata) {
           alert("Tidak ada data laporan untuk diekspor. Harap tampilkan laporan terlebih dahulu.");
@@ -425,7 +382,7 @@ const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ user, onLogout }) =
                 <nav className="-mb-px flex space-x-4 sm:space-x-8 overflow-x-auto" aria-label="Tabs">
                     <button onClick={() => setActiveTab('students')} className={`${activeTab === 'students' ? 'border-primary-500 text-primary-600' : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'} whitespace-nowrap py-4 px-1 border-b-2 font-medium text-sm`}>Manajemen Peserta Didik</button>
                     <button onClick={() => setActiveTab('tracker')} className={`${activeTab === 'tracker' ? 'border-primary-500 text-primary-600' : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'} whitespace-nowrap py-4 px-1 border-b-2 font-medium text-sm`}>Input & Grafik</button>
-                    <button onClick={() => setActiveTab('recap')} className={`${activeTab === 'recap' ? 'border-primary-500 text-primary-600' : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'} whitespace-nowrap py-4 px-1 border-b-2 font-medium text-sm`}>Rekap & Ekspor PDF</button>
+                    <button onClick={() => setActiveTab('recap')} className={`${activeTab === 'recap' ? 'border-primary-500 text-primary-600' : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'} whitespace-nowrap py-4 px-1 border-b-2 font-medium text-sm`}>Rekap & Ekspor</button>
                 </nav>
             </div>
             
@@ -549,7 +506,7 @@ const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ user, onLogout }) =
                         
                         {monthlyReportData && reportMetadata && (
                             <div className="space-y-4">
-                                <div ref={monthlyReportRef} className="p-4 sm:p-6 bg-white border">
+                                <div className="p-4 sm:p-6 bg-white border">
                                     <div className="text-center mb-6">
                                       <h3 className="text-xl font-bold text-primary-800">Laporan Rekapitulasi Pemantauan Kebiasaan Siswa</h3>
                                       <h4 className="text-lg font-semibold text-gray-800">Bulan: {reportMetadata.monthName} {reportMetadata.year}</h4>
@@ -593,7 +550,6 @@ const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ user, onLogout }) =
                                     {monthlyReportData.length === 0 && <p className="text-center text-gray-500 py-4">Tidak ada data ditemukan untuk periode ini.</p>}
                                 </div>
                                 <div className="text-center flex justify-center gap-4">
-                                    <Button onClick={handleExportClassPdf} variant="secondary">Ekspor Laporan Kelas (PDF)</Button>
                                     <Button 
                                         onClick={handleExportClassExcel} 
                                         variant="secondary" 
