@@ -1,6 +1,6 @@
 
 import React, { useState, useEffect, useCallback, useRef } from 'react';
-import { User, Student, HabitRecord, Habit, Rating } from '../types';
+import { User, Student, HabitRecord, Habit, Rating, RatingValue } from '../types';
 import Header from '../components/Header';
 import Button from '../components/Button';
 import Modal from '../components/Modal';
@@ -15,19 +15,22 @@ declare const jspdf: any;
 declare const html2canvas: any;
 declare const XLSX: any;
 
-interface ClassReportDetails {
-    daysInMonth: number;
-    monthName: string;
-    year: number;
-    className: string;
-}
-
-interface ClassReportRow {
-  studentId: string;
+interface DailyStudentRecord {
   studentName: string;
-  dailyAverages: (string | null)[];
+  habits: Record<Habit, RatingValue | '-'>;
 }
 
+interface DailyReport {
+  day: number;
+  date: string;
+  studentRecords: DailyStudentRecord[];
+}
+
+interface ReportMetadata {
+  monthName: string;
+  year: number;
+  className: string;
+}
 
 interface TeacherDashboardProps {
   user: User;
@@ -53,10 +56,10 @@ const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ user, onLogout }) =
       return initialHabits;
   });
   
-  // Recap State for new class-wide monthly report
+  // Recap State for new daily report format
   const [recapMonth, setRecapMonth] = useState(new Date().toISOString().substring(0, 7)); // YYYY-MM
-  const [classReportDetails, setClassReportDetails] = useState<ClassReportDetails | null>(null);
-  const [classReportData, setClassReportData] = useState<ClassReportRow[] | null>(null);
+  const [monthlyReportData, setMonthlyReportData] = useState<DailyReport[] | null>(null);
+  const [reportMetadata, setReportMetadata] = useState<ReportMetadata | null>(null);
 
 
   const reportRef = useRef<HTMLDivElement>(null);
@@ -251,12 +254,12 @@ const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ user, onLogout }) =
     }
   };
 
-  // Recap Handlers - NEW CLASS-WIDE LOGIC
+  // Recap Handlers - NEW DAILY REPORT LOGIC
   const handleGenerateClassReport = () => {
       if (students.length === 0) {
           alert("Tidak ada siswa di kelas Anda untuk membuat laporan.");
-          setClassReportData(null);
-          setClassReportDetails(null);
+          setMonthlyReportData(null);
+          setReportMetadata(null);
           return;
       }
 
@@ -264,73 +267,84 @@ const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ user, onLogout }) =
       const daysInMonth = new Date(year, month, 0).getDate();
       const monthName = new Date(year, month - 1, 1).toLocaleString('id-ID', { month: 'long' });
 
-      setClassReportDetails({ daysInMonth, monthName, year, className: user.kelas || '' });
+      setReportMetadata({ monthName, year, className: user.kelas || '' });
       
       const studentIds = students.map(s => s.id);
       const recordsForMonth = records.filter(r => 
           studentIds.includes(r.studentId) && r.date.startsWith(recapMonth)
       );
       
-      const recordsByStudentAndDate: Record<string, Record<string, HabitRecord>> = {};
+      const recordsByDate: Record<string, Record<string, HabitRecord>> = {};
       recordsForMonth.forEach(record => {
-          if (!recordsByStudentAndDate[record.studentId]) {
-              recordsByStudentAndDate[record.studentId] = {};
+          const date = record.date;
+          if (!recordsByDate[date]) {
+              recordsByDate[date] = {};
           }
-          recordsByStudentAndDate[record.studentId][record.date] = record;
+          recordsByDate[date][record.studentId] = record;
       });
 
-      const reportData = students.map(student => {
-          const dailyAverages: (string | null)[] = [];
-          for (let day = 1; day <= daysInMonth; day++) {
-              const dateStr = `${recapMonth}-${String(day).padStart(2, '0')}`;
-              const record = recordsByStudentAndDate[student.id]?.[dateStr];
+      const fullReport: DailyReport[] = [];
+      for (let day = 1; day <= daysInMonth; day++) {
+          const dateStr = `${recapMonth}-${String(day).padStart(2, '0')}`;
+          const recordsForDay = recordsByDate[dateStr] || {};
+          
+          const studentRecords: DailyStudentRecord[] = students.map(student => {
+              const studentRecord = recordsForDay[student.id];
+              const habits: Record<Habit, RatingValue | '-'> = {} as any;
               
-              if (record) {
-                  const totalScore = Object.values(record.habits).reduce((sum, rating) => {
-                      return sum + RATING_MAP[rating];
-                  }, 0);
-                  const average = totalScore / HABIT_NAMES.length;
-                  dailyAverages.push(average.toFixed(1));
-              } else {
-                  dailyAverages.push(null);
-              }
-          }
-          return { studentId: student.id, studentName: student.name, dailyAverages };
-      });
+              HABIT_NAMES.forEach(habitName => {
+                  if (studentRecord && studentRecord.habits[habitName]) {
+                      habits[habitName] = RATING_MAP[studentRecord.habits[habitName]];
+                  } else {
+                      habits[habitName] = '-';
+                  }
+              });
+
+              return { studentName: student.name, habits };
+          });
+          
+          fullReport.push({ day, date: dateStr, studentRecords });
+      }
       
-      setClassReportData(reportData);
+      setMonthlyReportData(fullReport);
   };
   
   const handleExportClassPdf = async () => {
-      if (!monthlyReportRef.current || !classReportDetails) {
+      if (!monthlyReportRef.current || !reportMetadata) {
           alert("Tidak ada data laporan untuk diekspor. Harap tampilkan laporan terlebih dahulu.");
           return;
       }
       try {
-          const { className, monthName, year } = classReportDetails;
+          const { className, monthName, year } = reportMetadata;
           const { jsPDF } = jspdf;
           const canvas = await html2canvas(monthlyReportRef.current, { scale: 2 });
           const imgData = canvas.toDataURL('image/png');
           
-          const pdf = new jsPDF('l', 'mm', 'a4'); // landscape
+          const pdf = new jsPDF('p', 'mm', 'a4'); // portrait
           const pdfWidth = pdf.internal.pageSize.getWidth();
           const pdfHeight = pdf.internal.pageSize.getHeight();
-          const imgWidth = canvas.width;
-          const imgHeight = canvas.height;
-          const ratio = imgWidth / imgHeight;
-          let finalImgWidth = pdfWidth - 20; // with margin
-          let finalImgHeight = finalImgWidth / ratio;
+
+          const canvasWidth = canvas.width;
+          const canvasHeight = canvas.height;
           
-          if (finalImgHeight > pdfHeight - 20) {
-            finalImgHeight = pdfHeight - 20;
-            finalImgWidth = finalImgHeight * ratio;
+          const ratio = canvasWidth / canvasHeight;
+          const imgWidth = pdfWidth - 20; // with margin
+          const imgHeight = imgWidth / ratio;
+          
+          let heightLeft = imgHeight;
+          let position = 10; // top margin
+
+          pdf.addImage(imgData, 'PNG', 10, position, imgWidth, imgHeight);
+          heightLeft -= (pdfHeight - 20);
+
+          while (heightLeft > 0) {
+              position = -heightLeft - 10;
+              pdf.addPage();
+              pdf.addImage(imgData, 'PNG', 10, position, imgWidth, imgHeight);
+              heightLeft -= (pdfHeight - 20);
           }
 
-          const xPos = (pdfWidth - finalImgWidth) / 2;
-          const yPos = (pdfHeight - finalImgHeight) / 2;
-          
-          pdf.addImage(imgData, 'PNG', xPos, yPos, finalImgWidth, finalImgHeight);
-          pdf.save(`laporan-bulanan-kelas-${className.replace(/\s/g, '_')}-${monthName}-${year}.pdf`);
+          pdf.save(`laporan-harian-kelas-${className.replace(/\s/g, '_')}-${monthName}-${year}.pdf`);
       } catch (error) {
           console.error("Error exporting monthly PDF:", error);
           alert("Gagal mengekspor PDF Laporan Bulanan.");
@@ -459,47 +473,52 @@ const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ user, onLogout }) =
                             <Button onClick={handleGenerateClassReport}>Tampilkan Laporan Kelas</Button>
                         </div>
                         
-                        {classReportData && classReportDetails && (
+                        {monthlyReportData && reportMetadata && (
                             <div className="space-y-4">
-                                <div ref={monthlyReportRef} className="p-4 sm:p-6 bg-white border" style={{minWidth: '1200px'}}>
-                                    <h3 className="text-xl font-bold text-center text-primary-800 mb-1">Laporan Rekapitulasi Pemantauan Kebiasaan Siswa</h3>
-                                    <h4 className="text-lg font-semibold text-center text-gray-800">Bulan: {classReportDetails.monthName} {classReportDetails.year}</h4>
-                                    <div className="flex justify-between my-4 text-sm">
-                                      <p><strong>Kelas:</strong> {classReportDetails.className}</p>
-                                      <p><strong>Guru:</strong> {user.name}</p>
+                                <div ref={monthlyReportRef} className="p-4 sm:p-6 bg-white border">
+                                    <div className="text-center mb-6">
+                                      <h3 className="text-xl font-bold text-primary-800">Laporan Rekapitulasi Pemantauan Kebiasaan Siswa</h3>
+                                      <h4 className="text-lg font-semibold text-gray-800">Bulan: {reportMetadata.monthName} {reportMetadata.year}</h4>
                                     </div>
-                                    <div className="overflow-x-auto">
-                                        <table className="w-full text-left text-xs border-collapse border border-gray-300">
-                                            <thead className="bg-primary-100">
-                                                <tr className="text-center">
-                                                    <th rowSpan={2} className="p-2 border border-gray-300 align-middle">No</th>
-                                                    <th rowSpan={2} className="p-2 border border-gray-300 align-middle" style={{minWidth: '150px'}}>Nama Peserta Didik</th>
-                                                    <th colSpan={classReportDetails.daysInMonth} className="p-2 border border-gray-300">Tanggal</th>
-                                                </tr>
-                                                <tr className="text-center">
-                                                    {Array.from({ length: classReportDetails.daysInMonth }, (_, i) => i + 1).map(day => (
-                                                        <th key={day} className="p-2 border border-gray-300 w-8">{day}</th>
-                                                    ))}
-                                                </tr>
-                                            </thead>
-                                            <tbody>
-                                                {classReportData.map((data, index) => (
-                                                    <tr key={data.studentId} className="border-b hover:bg-gray-50">
-                                                        <td className="p-2 border border-gray-300 text-center">{index + 1}</td>
-                                                        <td className="p-2 border border-gray-300 font-medium whitespace-nowrap">{data.studentName}</td>
-                                                        {data.dailyAverages.map((avg, dayIndex) => (
-                                                            <td key={dayIndex} className="p-2 border border-gray-300 text-center">
-                                                                {avg !== null ? avg : '-'}
-                                                            </td>
+                                    <div className="flex justify-between my-4 text-sm font-semibold">
+                                      <p>Kelas: {reportMetadata.className}</p>
+                                      <p>Guru: {user.name}</p>
+                                    </div>
+                                    
+                                    {monthlyReportData.map((dailyData) => (
+                                        <div key={dailyData.date} className="mb-8">
+                                            <h5 className="font-bold text-center bg-gray-100 p-2 rounded-t-md">TANGGAL {dailyData.day}</h5>
+                                            <div className="overflow-x-auto">
+                                                <table className="w-full text-left text-xs border-collapse border border-gray-300">
+                                                    <thead className="bg-primary-50">
+                                                        <tr className="text-center">
+                                                            <th className="p-2 border border-gray-300">No</th>
+                                                            <th className="p-2 border border-gray-300" style={{minWidth: '150px'}}>Nama Peserta Didik</th>
+                                                            {HABIT_NAMES.map(habit => (
+                                                                <th key={habit} className="p-2 border border-gray-300 whitespace-nowrap">{habit.replace(' ', '\n')}</th>
+                                                            ))}
+                                                        </tr>
+                                                    </thead>
+                                                    <tbody>
+                                                        {dailyData.studentRecords.map((data, index) => (
+                                                            <tr key={index} className="border-b hover:bg-gray-50">
+                                                                <td className="p-2 border border-gray-300 text-center">{index + 1}</td>
+                                                                <td className="p-2 border border-gray-300 font-medium whitespace-nowrap">{data.studentName}</td>
+                                                                {HABIT_NAMES.map(habit => (
+                                                                    <td key={habit} className="p-2 border border-gray-300 text-center">
+                                                                        {data.habits[habit]}
+                                                                    </td>
+                                                                ))}
+                                                            </tr>
                                                         ))}
-                                                    </tr>
-                                                ))}
-                                            </tbody>
-                                        </table>
-                                        {classReportData.length === 0 && <p className="text-center text-gray-500 py-4">Tidak ada data ditemukan untuk periode ini.</p>}
-                                    </div>
-                                    <div className="mt-4 text-xs text-gray-600">
-                                        <p><strong>Keterangan:</strong> Angka dalam tabel merupakan nilai rata-rata dari 7 kebiasaan harian (skala 1-5).</p>
+                                                    </tbody>
+                                                </table>
+                                            </div>
+                                        </div>
+                                    ))}
+                                    {monthlyReportData.length === 0 && <p className="text-center text-gray-500 py-4">Tidak ada data ditemukan untuk periode ini.</p>}
+                                     <div className="mt-6 text-xs text-gray-600">
+                                        <p><strong>Keterangan:</strong> Angka dalam tabel merupakan nilai/skor kebiasaan harian (skala 1-5).</p>
                                     </div>
                                 </div>
                                 <div className="text-center">
