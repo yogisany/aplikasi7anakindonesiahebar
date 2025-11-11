@@ -32,7 +32,7 @@ const LoginPage: React.FC<LoginPageProps> = ({ onLogin }) => {
         {/* Image Section */}
         <div className="hidden md:block md:w-1/2">
           <img 
-            src="https://i.ibb.co.com/gL2jRHk4/kartun-anak-indonesia.png" 
+            src="https://i.ibb.co.com/NR5GNWg/foto-siswa-di-kelas.png" 
             alt="Ilustrasi Anak Sekolah Ceria" 
             className="object-cover w-full h-full"
           />
