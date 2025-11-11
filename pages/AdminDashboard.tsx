@@ -22,6 +22,12 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ user, onLogout }) => {
   const [formData, setFormData] = useState({ id: '', name: '', username: '', password: '', nip: '', kelas: '' });
   const fileInputRef = useRef<HTMLInputElement>(null);
 
+  // State for admin account settings
+  const [adminUsername, setAdminUsername] = useState(user.username);
+  const [adminPassword, setAdminPassword] = useState('');
+  const [confirmPassword, setConfirmPassword] = useState('');
+
+
   const fetchTeachers = useCallback(() => {
     const allUsers: User[] = JSON.parse(localStorage.getItem('users') || '[]');
     setTeachers(allUsers.filter(u => u.role === 'teacher'));
@@ -177,6 +183,41 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ user, onLogout }) => {
     reader.readAsArrayBuffer(file);
   };
 
+  const handleAdminAccountUpdate = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (adminPassword && adminPassword !== confirmPassword) {
+      alert('Konfirmasi password tidak cocok.');
+      return;
+    }
+
+    const allUsers: User[] = JSON.parse(localStorage.getItem('users') || '[]');
+    let updatedCurrentUser: User | null = null;
+
+    const updatedUsers = allUsers.map(u => {
+      if (u.id === user.id) {
+        const updatedUser = {
+          ...u,
+          username: adminUsername,
+          password: adminPassword ? adminPassword : u.password,
+        };
+        updatedCurrentUser = updatedUser;
+        return updatedUser;
+      }
+      return u;
+    });
+
+    localStorage.setItem('users', JSON.stringify(updatedUsers));
+
+    if (updatedCurrentUser) {
+      sessionStorage.setItem('currentUser', JSON.stringify(updatedCurrentUser));
+    }
+
+    alert('Username dan/atau password admin berhasil diperbarui. Perubahan akan terlihat sepenuhnya setelah login kembali.');
+    setAdminPassword('');
+    setConfirmPassword('');
+  };
+
+
   return (
     <>
       <Header user={user} onLogout={onLogout} title="Admin Dashboard" />
@@ -238,6 +279,51 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ user, onLogout }) => {
               </tbody>
             </table>
           </div>
+        </div>
+
+        <div className="mt-6 bg-white p-6 rounded-lg shadow-md">
+            <h2 className="text-xl font-semibold text-primary-700 mb-4">Pengaturan Akun Admin</h2>
+            <form onSubmit={handleAdminAccountUpdate} className="space-y-4 max-w-lg">
+                <div>
+                    <label htmlFor="adminUsername" className="block text-sm font-medium text-gray-700">Username Admin</label>
+                    <input 
+                        type="text" 
+                        name="adminUsername" 
+                        id="adminUsername" 
+                        value={adminUsername} 
+                        onChange={(e) => setAdminUsername(e.target.value)} 
+                        required 
+                        className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-primary-500 focus:border-primary-500" 
+                    />
+                </div>
+                <div>
+                    <label htmlFor="adminPassword" className="block text-sm font-medium text-gray-700">Password Baru (opsional)</label>
+                    <input 
+                        type="password" 
+                        name="adminPassword" 
+                        id="adminPassword" 
+                        value={adminPassword} 
+                        onChange={(e) => setAdminPassword(e.target.value)} 
+                        placeholder="Kosongkan jika tidak ingin ganti"
+                        className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-primary-500 focus:border-primary-500" 
+                    />
+                </div>
+                <div>
+                    <label htmlFor="confirmPassword" className="block text-sm font-medium text-gray-700">Konfirmasi Password Baru</label>
+                    <input 
+                        type="password" 
+                        name="confirmPassword" 
+                        id="confirmPassword" 
+                        value={confirmPassword} 
+                        onChange={(e) => setConfirmPassword(e.target.value)}
+                        placeholder="Ulangi password baru"
+                        className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-primary-500 focus:border-primary-500" 
+                    />
+                </div>
+                <div className="pt-2">
+                    <Button type="submit">Simpan Perubahan Akun</Button>
+                </div>
+            </form>
         </div>
       </main>
       
