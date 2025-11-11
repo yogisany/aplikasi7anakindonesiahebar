@@ -69,7 +69,10 @@ const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ user, onLogout }) =
 
   const fetchStudents = useCallback(() => {
     const allStudents: Student[] = JSON.parse(localStorage.getItem('students') || '[]');
-    setStudents(allStudents.filter(s => s.teacherId === user.id));
+    const teacherStudents = allStudents.filter(s => s.teacherId === user.id);
+    // Sort students alphabetically by name for consistent ordering in reports
+    teacherStudents.sort((a, b) => a.name.localeCompare(b.name));
+    setStudents(teacherStudents);
   }, [user.id]);
   
   const fetchRecords = useCallback(() => {
@@ -272,15 +275,11 @@ const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ user, onLogout }) =
               
               HABIT_NAMES.forEach(habitName => {
                   const rawValue = studentRecord?.habits[habitName];
-                  // FIX: The type of `rawValue` is `Rating`, which doesn't include '-'.
-                  // The comparison against `'-'` caused a type error. `if (rawValue)` is sufficient.
                   if (rawValue) {
-                      // Attempt to treat it as a number first
                       const numericValue = Number(rawValue);
                       if (!isNaN(numericValue) && numericValue >= 1 && numericValue <= 5) {
                           habits[habitName] = RATING_DESCRIPTION_MAP[numericValue as RatingValue];
                       } else {
-                          // If it's not a valid number, assume it's already the description string
                           habits[habitName] = rawValue as Rating;
                       }
                   } else {
@@ -289,11 +288,13 @@ const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ user, onLogout }) =
               });
 
               return { studentName: student.name, habits };
-          });
+          }).sort((a, b) => a.studentName.localeCompare(b.studentName)); // Sort students alphabetically within the day's report
           
           fullReport.push({ day, date: dateStr, studentRecords });
       }
       
+      // Sort the entire report by day to ensure chronological order.
+      fullReport.sort((a, b) => a.day - b.day);
       setMonthlyReportData(fullReport);
   };
   
