@@ -549,6 +549,19 @@ const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ user, onLogout }) =
                                     </div>
                                     <HabitChart record={selectedRecord} />
                                 </div>
+                                
+                                <div className="mt-6 pt-4 border-t text-xs text-gray-600">
+                                    <div className="mt-2 p-2 border rounded-md bg-white shadow-sm">
+                                        <p className="font-bold">Arti Nilai Skala:</p>
+                                        <ul className="list-none pl-0">
+                                            <li><strong>5</strong> = Sudah Terbiasa</li>
+                                            <li><strong>4</strong> = Terbiasa</li>
+                                            <li><strong>3</strong> = Belum Terbiasa</li>
+                                            <li><strong>2</strong> = Kurang Terbiasa</li>
+                                            <li><strong>1</strong> = Sangat Tidak Terbiasa</li>
+                                        </ul>
+                                    </div>
+                                </div>
                             </div>
                         )}
                          {selectedStudentId && (
