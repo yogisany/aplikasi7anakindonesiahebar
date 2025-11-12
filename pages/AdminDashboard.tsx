@@ -104,7 +104,7 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ user, onLogout }) => {
         setMessages(allMessages);
         const newUnreadSenders = new Set<string>();
         allMessages.forEach((msg: Message) => {
-            if (!msg.read) {
+            if (!msg.read && msg.senderId !== user.id) { // Only count received unread messages
                 newUnreadSenders.add(msg.senderId);
             }
         });
@@ -143,7 +143,7 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ user, onLogout }) => {
             method: 'POST',
             body: JSON.stringify({ senderId: selectedRecipientId, recipientId: user.id }),
         });
-        fetchMessages();
+        fetchMessages(); // Refetch messages to update the unread status
       } catch (error) {
         console.error("Failed to mark messages as read:", error);
       }
@@ -253,7 +253,7 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ user, onLogout }) => {
                 return;
             }
             
-            await apiRequest('/users/bulk-import', {
+            await apiRequest('/users/bulk', {
                 method: 'POST',
                 body: JSON.stringify(newTeachers)
             });
@@ -457,7 +457,7 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ user, onLogout }) => {
                       {unreadSenders.size > 0 && <span className="ml-2 w-2 h-2 bg-red-500 rounded-full"></span>}
                     </button>
                     <button onClick={() => setActiveTab('account')} className={tabClass('account')}>Akun Saya</button>
-                    <button onClick={() => setActiveTab('donation')} className={tabClass('donation')}>Developer</button>
+                    <button onClick={() => setActiveTab('donation')} className={tabClass('donation')}>Dukungan</button>
                 </nav>
             </div>
             
@@ -664,10 +664,10 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ user, onLogout }) => {
                 <div className="space-y-6 text-center max-w-3xl mx-auto">
                     <h2 className="text-2xl font-bold text-primary-700">Dukung Pengembangan Aplikasi</h2>
                     <p className="text-gray-600">
-                        Aplikasi ini dikembangkan oleh saya sendiri untuk digunakan secara gratis. Dukungan Anda sangat berarti bagi saya untuk terus melakukan pemeliharaan, perbaikan, dan penambahan fitur-fitur baru yang bermanfaat bagi dunia pendidikan.
+                        Aplikasi ini dikembangkan dan dikelola secara mandiri untuk dapat digunakan secara gratis. Dukungan Anda sangat berarti untuk pemeliharaan, perbaikan, dan penambahan fitur-fitur baru yang bermanfaat bagi dunia pendidikan.
                     </p>
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-8 pt-4">
-                        <div className="p-6 border rounded-lg shadow-sm bg-primary-50"><h3 className="text-xl font-semibold mb-4 text-primary-800">Scan QRIS</h3><img src="https://i.ibb.co/YT4dT6cK/KODE-QRIS-YOGI-SANY.jpg" alt="QRIS Code for Donation" className="w-100 h-100 mx-auto" /><p className="text-sm mt-2 text-gray-500">Mendukung semua E-Wallet dan Mobile Banking.</p></div>
+                        <div className="p-6 border rounded-lg shadow-sm bg-primary-50"><h3 className="text-xl font-semibold mb-4 text-primary-800">Scan QRIS</h3><img src="https://i.ibb.co/YT4dT6cK/KODE-QRIS-YOGI-SANY.jpg" alt="QRIS Code for Donation" className="w-full max-w-xs mx-auto" /><p className="text-sm mt-2 text-gray-500">Mendukung semua E-Wallet dan Mobile Banking.</p></div>
                         <div className="p-6 border rounded-lg shadow-sm bg-gray-50"><h3 className="text-xl font-semibold mb-4 text-gray-800">Transfer Bank</h3><div className="text-left space-y-3"><p><strong>Bank:</strong> Bank Central Asia (BCA)</p><p><strong>No. Rekening:</strong> 1393738034</p><p><strong>Atas Nama:</strong> Yogi Sany</p></div></div>
                     </div>
                     <p className="text-lg font-semibold text-gray-700 pt-6">Terima kasih atas dukungan dan kebaikan Anda!</p>

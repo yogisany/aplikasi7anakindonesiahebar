@@ -20,6 +20,7 @@ const LoginPage: React.FC<LoginPageProps> = ({ onLogin }) => {
     setLoading(true);
 
     try {
+      // This now calls the API placeholder, ready for a real backend endpoint
       const response = await apiRequest('/auth/login', {
         method: 'POST',
         body: JSON.stringify({ username, password }),

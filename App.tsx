@@ -4,10 +4,6 @@ import LoginPage from './pages/LoginPage';
 import AdminDashboard from './pages/AdminDashboard';
 import TeacherDashboard from './pages/TeacherDashboard';
 import { User } from './types';
-import { initializeData } from './utils/mockApi';
-
-// Initialize mock data on first load
-initializeData();
 
 const App: React.FC = () => {
   const [currentUser, setCurrentUser] = useState<User | null>(null);

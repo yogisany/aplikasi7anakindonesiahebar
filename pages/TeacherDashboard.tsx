@@ -1,6 +1,6 @@
 
 import React, { useState, useEffect, useCallback, useRef } from 'react';
-import { User, Student, HabitRecord, Habit, Rating, RatingValue, AdminReport, Message, Attachment } from '../types';
+import { User, Student, HabitRecord, Habit, Rating } from '../types';
 import Header from '../components/Header';
 import Button from '../components/Button';
 import Modal from '../components/Modal';
@@ -11,7 +11,7 @@ import TrashIcon from '../components/icons/TrashIcon';
 import EmojiIcon from '../components/icons/EmojiIcon';
 import AttachmentIcon from '../components/icons/AttachmentIcon';
 import DownloadIcon from '../components/icons/DownloadIcon';
-import { HABIT_NAMES, RATING_OPTIONS, RATING_DESCRIPTION_MAP } from '../constants';
+import { HABIT_NAMES, RATING_OPTIONS } from '../constants';
 import { apiRequest } from '../utils/mockApi';
 
 // Declare XLSX from global scope
@@ -70,9 +70,9 @@ const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ user, onLogout }) =
   const [reportMetadata, setReportMetadata] = useState<ReportMetadata | null>(null);
 
   // Messaging State
-  const [messages, setMessages] = useState<Message[]>([]);
+  const [messages, setMessages] = useState<any[]>([]);
   const [newMessage, setNewMessage] = useState('');
-  const [attachment, setAttachment] = useState<Attachment | null>(null);
+  const [attachment, setAttachment] = useState<any | null>(null);
   const [adminUser, setAdminUser] = useState<User | null>(null);
   const [hasUnreadMessages, setHasUnreadMessages] = useState(false);
   const [showEmojiPicker, setShowEmojiPicker] = useState(false);
@@ -112,7 +112,7 @@ const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ user, onLogout }) =
         const data = await apiRequest(`/messages?userId=${user.id}`);
         if (Array.isArray(data)) {
           setMessages(data);
-          const hasUnread = data.some((msg: Message) => !msg.read );
+          const hasUnread = data.some((msg: any) => !msg.read && msg.senderId !== user.id);
           setHasUnreadMessages(hasUnread);
         }
     } catch (error) {
@@ -124,7 +124,6 @@ const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ user, onLogout }) =
     try {
         const admins = await apiRequest('/users?role=admin');
         if (Array.isArray(admins)) {
-          // Find main admin or first admin
           const mainAdmin = admins.find(a => a.id === 'admin01') || admins[0];
           setAdminUser(mainAdmin || null);
         }
@@ -176,7 +175,7 @@ const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ user, onLogout }) =
           method: 'POST',
           body: JSON.stringify({ userId: user.id })
         });
-        fetchMessages(); // Refetch to update UI and state
+        fetchMessages();
       } catch (error) {
         console.error("Failed to mark all messages as read", error);
       }
@@ -267,8 +266,8 @@ const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ user, onLogout }) =
 
       if (window.confirm(`Yakin ingin menghapus ${selectedStudents.size} siswa? Tindakan ini tidak dapat dibatalkan.`)) {
           try {
-              await apiRequest('/students/bulk-delete', {
-                  method: 'POST',
+              await apiRequest('/students/bulk', {
+                  method: 'DELETE',
                   body: JSON.stringify({ ids: Array.from(selectedStudents) })
               });
               fetchStudents();
@@ -326,7 +325,7 @@ const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ user, onLogout }) =
                 return;
             }
             
-            await apiRequest('/students/bulk-import', {
+            await apiRequest('/students/bulk', {
                 method: 'POST',
                 body: JSON.stringify(newStudents)
             });
@@ -576,7 +575,7 @@ const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ user, onLogout }) =
                         Pesan
                         {hasUnreadMessages && <span className="ml-2 w-2 h-2 bg-red-500 rounded-full"></span>}
                     </button>
-                    <button onClick={() => handleTabClick('donation')} className={tabClass('donation')}>Developer</button>
+                    <button onClick={() => handleTabClick('donation')} className={tabClass('donation')}>Dukungan</button>
                 </nav>
             </div>
             
@@ -784,7 +783,7 @@ const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ user, onLogout }) =
                     <div className="space-y-6 text-center max-w-3xl mx-auto">
                         <h2 className="text-2xl font-bold text-primary-700">Dukung Pengembangan Aplikasi</h2>
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-8 pt-4">
-                            <div className="p-6 border rounded-lg shadow-sm bg-primary-50"><h3 className="text-xl font-semibold mb-4 text-primary-800">Scan QRIS</h3><img src="https://i.ibb.co/YT4dT6cK/KODE-QRIS-YOGI-SANY.jpg" alt="QRIS Code for Donation" className="w-100 h-100 mx-auto" /></div>
+                            <div className="p-6 border rounded-lg shadow-sm bg-primary-50"><h3 className="text-xl font-semibold mb-4 text-primary-800">Scan QRIS</h3><img src="https://i.ibb.co/YT4dT6cK/KODE-QRIS-YOGI-SANY.jpg" alt="QRIS Code for Donation" className="w-full max-w-xs mx-auto" /></div>
                             <div className="p-6 border rounded-lg shadow-sm bg-gray-50"><h3 className="text-xl font-semibold mb-4 text-gray-800">Transfer Bank</h3><div className="text-left space-y-3"><p><strong>Bank:</strong> BCA</p><p><strong>No. Rekening:</strong> 1393738034</p><p><strong>Atas Nama:</strong> Yogi Sany</p></div></div>
                         </div>
                     </div>
