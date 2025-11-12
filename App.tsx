@@ -32,8 +32,8 @@ const App: React.FC = () => {
         localStorage.setItem('messages', JSON.stringify([]));
     }
 
-    // Check for logged in user in session storage
-    const loggedInUser = sessionStorage.getItem('currentUser');
+    // Check for logged in user in local storage for persistence across tabs/browsers
+    const loggedInUser = localStorage.getItem('currentUser');
     if (loggedInUser) {
       setCurrentUser(JSON.parse(loggedInUser));
     }
@@ -42,12 +42,12 @@ const App: React.FC = () => {
 
   const handleLogin = useCallback((user: User) => {
     setCurrentUser(user);
-    sessionStorage.setItem('currentUser', JSON.stringify(user));
+    localStorage.setItem('currentUser', JSON.stringify(user));
   }, []);
 
   const handleLogout = useCallback(() => {
     setCurrentUser(null);
-    sessionStorage.removeItem('currentUser');
+    localStorage.removeItem('currentUser');
   }, []);
 
   if (loading) {
