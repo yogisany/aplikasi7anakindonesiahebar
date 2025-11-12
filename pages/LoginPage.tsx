@@ -1,8 +1,6 @@
-
 import React, { useState } from 'react';
 import { User } from '../types';
 import Button from '../components/Button';
-import Modal from '../components/Modal';
 
 interface LoginPageProps {
   onLogin: (user: User) => void;
@@ -11,36 +9,14 @@ interface LoginPageProps {
 const LoginPage: React.FC<LoginPageProps> = ({ onLogin }) => {
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
+  const [accessCode, setAccessCode] = useState('');
   const [error, setError] = useState('');
 
-  // State for Sync Modal
-  const [isSyncModalOpen, setIsSyncModalOpen] = useState(false);
-  const [syncCode, setSyncCode] = useState('');
-  const [syncError, setSyncError] = useState('');
-
-  const handleSubmit = (e: React.FormEvent) => {
-    e.preventDefault();
-    setError('');
-
-    const users: User[] = JSON.parse(localStorage.getItem('users') || '[]');
-    const user = users.find(u => u.username === username && u.password === password);
-
-    if (user) {
-      onLogin(user);
-    } else {
-      setError('Username atau password salah.');
-    }
-  };
-
-  const handleSyncSubmit = () => {
-    setSyncError('');
-    if (!syncCode.trim()) {
-      setSyncError('Kode tidak boleh kosong.');
-      return;
-    }
+  const handleSync = (code: string): boolean => {
     try {
-      const decodedString = atob(syncCode);
-      const data = JSON.parse(decodedString);
+      // FIX: Use decodeURIComponent to correctly handle special/unicode characters.
+      const jsonString = decodeURIComponent(escape(atob(code)));
+      const data = JSON.parse(jsonString);
       
       const requiredKeys = ['users', 'students', 'habit_records', 'admin_reports', 'messages'];
       const dataKeys = Object.keys(data);
@@ -49,20 +25,49 @@ const LoginPage: React.FC<LoginPageProps> = ({ onLogin }) => {
         throw new Error('Format kode tidak valid atau data tidak lengkap.');
       }
 
-      localStorage.clear();
-
+      // We don't clear, just overwrite. This is safer.
       requiredKeys.forEach(key => {
         localStorage.setItem(key, JSON.stringify(data[key]));
       });
-
-      alert('Sinkronisasi berhasil! Halaman akan dimuat ulang agar perubahan diterapkan.');
-      window.location.reload();
-
-    } catch (error) {
-      console.error('Sync failed:', error);
-      setSyncError('Gagal melakukan sinkronisasi. Pastikan kode yang Anda masukkan benar dan tidak rusak.');
+      
+      alert('Sinkronisasi berhasil! Perangkat ini sekarang memiliki data terbaru.');
+      return true;
+    } catch (err) {
+      console.error('Sync failed:', err);
+      setError('Gagal melakukan sinkronisasi. Pastikan Kode Akses yang Anda masukkan benar.');
+      return false;
     }
   };
+
+  const handleSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    setError('');
+
+    // Step 1: Handle synchronization if access code is provided
+    if (accessCode.trim()) {
+      const syncSuccess = handleSync(accessCode);
+      if (!syncSuccess) {
+        return; // Stop if sync fails
+      }
+    }
+
+    // Step 2: Proceed with login attempt
+    const users: User[] = JSON.parse(localStorage.getItem('users') || '[]');
+    const user = users.find(u => u.username === username && u.password === password);
+
+    if (user) {
+      onLogin(user);
+    } else {
+      let errorMessage = 'Username atau password salah.';
+      if (accessCode.trim()) {
+        errorMessage += ' Silakan coba login lagi.';
+      } else {
+        errorMessage += " Jika ini perangkat baru, Anda memerlukan 'Kode Akses' dari admin.";
+      }
+      setError(errorMessage);
+    }
+  };
+
 
   return (
     <>
@@ -119,6 +124,18 @@ const LoginPage: React.FC<LoginPageProps> = ({ onLogin }) => {
                 />
               </div>
 
+              <div>
+                <textarea
+                  className="w-full px-4 py-3 rounded-2xl border-2 border-primary-200 bg-primary-50 focus:bg-white focus:outline-none focus:ring-2 focus:ring-primary-400 focus:border-transparent transition-all text-sm"
+                  placeholder="Kode Akses (Opsional, isi HANYA untuk login di perangkat baru)"
+                  value={accessCode}
+                  onChange={(e) => setAccessCode(e.target.value)}
+                  aria-label="Kode Akses"
+                  rows={3}
+                />
+              </div>
+
+
               {error && <p className="text-sm text-red-600 text-center">{error}</p>}
 
               <Button type="submit" className="w-full !py-3 !rounded-full text-lg tracking-wider font-bold shadow-lg !bg-orange-500 hover:!bg-orange-600 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-orange-500 transition-transform transform hover:scale-105">
@@ -126,39 +143,9 @@ const LoginPage: React.FC<LoginPageProps> = ({ onLogin }) => {
               </Button>
             </form>
 
-            <div className="text-center mt-6">
-              <button 
-                  type="button" 
-                  onClick={() => setIsSyncModalOpen(true)}
-                  className="text-sm text-primary-600 hover:underline font-semibold"
-              >
-                  Sinkronisasi Data dari Perangkat Admin
-              </button>
-            </div>
-
           </div>
         </div>
       </div>
-
-      <Modal isOpen={isSyncModalOpen} onClose={() => setIsSyncModalOpen(false)} title="Sinkronisasi Data Aplikasi">
-        <div className="space-y-4">
-            <p className="text-sm text-gray-600">
-                Tempelkan (paste) kode sinkronisasi yang Anda dapatkan dari admin utama di sini untuk memperbarui semua data di perangkat ini.
-            </p>
-            <textarea
-                value={syncCode}
-                onChange={(e) => setSyncCode(e.target.value)}
-                className="w-full h-32 p-2 border rounded-md focus:outline-none focus:ring-primary-500 focus:border-primary-500"
-                placeholder="Tempelkan kode di sini..."
-                aria-label="Sync Code Input"
-            />
-            {syncError && <p className="text-sm text-red-500">{syncError}</p>}
-            <div className="flex justify-end gap-2">
-                <Button type="button" variant="secondary" onClick={() => setIsSyncModalOpen(false)}>Batal</Button>
-                <Button onClick={handleSyncSubmit}>Sinkronkan</Button>
-            </div>
-        </div>
-      </Modal>
     </>
   );
 };

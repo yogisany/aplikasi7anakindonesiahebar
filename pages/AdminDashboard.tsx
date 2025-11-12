@@ -376,7 +376,8 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ user, onLogout }) => {
         messages: JSON.parse(localStorage.getItem('messages') || '[]'),
     };
     const jsonString = JSON.stringify(dataToSync);
-    const base64String = btoa(jsonString);
+    // FIX: Use encodeURIComponent to handle potential special/unicode characters in names, etc.
+    const base64String = btoa(unescape(encodeURIComponent(jsonString)));
     setSyncCode(base64String);
   };
 
@@ -619,17 +620,17 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ user, onLogout }) => {
                         <h2 className="text-xl font-semibold text-primary-700 mb-4">Sinkronisasi Data Antar Perangkat</h2>
                         <div className="p-4 border rounded-lg bg-yellow-50 border-yellow-200 text-yellow-800">
                             <p className="font-bold">Penting:</p>
-                            <p className="text-sm">Fitur ini digunakan untuk menyalin semua data dari perangkat ini ke perangkat lain (misalnya, laptop guru). Guru tidak akan bisa login di laptopnya jika data belum disinkronkan.</p>
+                            <p className="text-sm">Fitur ini digunakan untuk menyalin semua data dari perangkat ini ke perangkat lain (misalnya, laptop guru). Guru tidak akan bisa login di laptop barunya jika data belum disinkronkan terlebih dahulu menggunakan kode ini.</p>
                         </div>
                         <div className="mt-6">
                             <Button onClick={generateSyncCode}>
                                 <SyncIcon className="w-5 h-5"/>
-                                <span>Buat Kode Sinkronisasi Baru</span>
+                                <span>Buat Kode Akses Baru</span>
                             </Button>
 
                             {syncCode && (
                                 <div className="mt-4 space-y-2">
-                                    <p className="text-sm text-gray-600">Salin kode di bawah ini dan bagikan kepada semua guru. Minta mereka untuk memasukkan kode ini di halaman login.</p>
+                                    <p className="text-sm text-gray-600">Salin kode di bawah ini dan bagikan kepada guru. Minta mereka untuk menempelkan kode ini di kolom "Kode Akses" pada halaman login saat pertama kali masuk di perangkat baru.</p>
                                     <div className="relative">
                                         <textarea
                                             readOnly
