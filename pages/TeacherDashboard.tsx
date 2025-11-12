@@ -72,8 +72,8 @@ const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ user, onLogout }) =
   const fetchStudents = useCallback(() => {
     const allStudents: Student[] = JSON.parse(localStorage.getItem('students') || '[]');
     const teacherStudents = allStudents.filter(s => s.teacherId === user.id);
-    // Sort students alphabetically by name for consistent ordering in reports
-    teacherStudents.sort((a, b) => a.name.localeCompare(b.name));
+    // Sort students with natural sorting for better ordering (e.g., "Siswa 2" before "Siswa 10")
+    teacherStudents.sort((a, b) => a.name.localeCompare(b.name, 'id-ID', { numeric: true, sensitivity: 'base' }));
     setStudents(teacherStudents);
   }, [user.id]);
   
@@ -106,7 +106,7 @@ const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ user, onLogout }) =
       setStudentFormData({ id: student.id, name: student.name, nisn: student.nisn, class: student.class });
     } else {
       setEditingStudent(null);
-      setStudentFormData({ id: '', name: '', nisn: '', class: '' });
+      setStudentFormData({ id: '', name: '', nisn: '', class: user.kelas || '' });
     }
     setIsStudentModalOpen(true);
   };
@@ -219,21 +219,21 @@ const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ user, onLogout }) =
             const worksheet = workbook.Sheets[sheetName];
             const json: any[] = XLSX.utils.sheet_to_json(worksheet);
 
-            if (json.length > 0 && (json[0].No === undefined || json[0].Nama === undefined || json[0].NISN === undefined || json[0].Kelas === undefined)) {
-                alert("Format Excel tidak sesuai. Pastikan sheet pertama memiliki header kolom 'No', 'Nama', 'NISN', dan 'Kelas'.");
+            if (json.length > 0 && json[0].Nama === undefined) {
+                alert("Format Excel tidak sesuai. Pastikan sheet pertama setidaknya memiliki header kolom 'Nama'. Kolom 'No', 'NISN', dan 'Kelas' juga direkomendasikan.");
                 return;
             }
 
             const newStudents: Student[] = json.map((row: any, index: number) => ({
-                id: `student_${Date.now()}_${index}_${row.NISN}`, // FIX: Ensure unique ID by adding index
+                id: `student_${Date.now()}_${index}_${row.NISN || Math.random().toString(36).substr(2, 9)}`,
                 name: String(row.Nama || '').trim(),
                 nisn: String(row.NISN || '').trim(),
-                class: String(row.Kelas || '').trim(),
+                class: String(row.Kelas || '').trim() || user.kelas || '',
                 teacherId: user.id,
-            })).filter(student => student.name && student.nisn && student.class);
+            })).filter(student => student.name);
 
             if (newStudents.length === 0) {
-                alert("Tidak ada data siswa yang valid ditemukan di dalam file.");
+                alert("Tidak ada data siswa yang valid ditemukan di dalam file. Pastikan ada data di bawah header 'Nama'.");
                 return;
             }
 
@@ -464,7 +464,7 @@ const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ user, onLogout }) =
                             </div>
                         </div>
                         <p className="text-sm text-gray-500 mb-4">
-                            Untuk import, siapkan file Excel dengan kolom header: <strong>No</strong>, <strong>Nama</strong>, <strong>NISN</strong>, <strong>Kelas</strong>.
+                            Untuk import, siapkan file Excel dengan kolom header: <strong>No</strong>, <strong>Nama</strong>, <strong>NISN</strong>, <strong>Kelas</strong>. Hanya kolom <strong>Nama</strong> yang wajib diisi.
                         </p>
                         <input
                             type="file"
@@ -696,7 +696,7 @@ const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ user, onLogout }) =
           </div>
           <div>
             <label htmlFor="nisn" className="block text-sm font-medium text-gray-700">NISN</label>
-            <input type="text" name="nisn" id="nisn" value={studentFormData.nisn} onChange={handleStudentFormChange} required className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-primary-500 focus:border-primary-500" />
+            <input type="text" name="nisn" id="nisn" value={studentFormData.nisn} onChange={handleStudentFormChange} className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-primary-500 focus:border-primary-500" />
           </div>
            <div>
             <label htmlFor="class" className="block text-sm font-medium text-gray-700">Kelas</label>
