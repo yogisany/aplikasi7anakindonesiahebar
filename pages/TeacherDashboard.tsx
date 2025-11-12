@@ -541,6 +541,15 @@ const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ user, onLogout }) =
     setAttachment(null);
     setShowEmojiPicker(false);
   };
+
+  const handleDeleteMessage = (messageId: string) => {
+    if (window.confirm('Apakah Anda yakin ingin menghapus pesan ini?')) {
+        const allMessages: Message[] = JSON.parse(localStorage.getItem('messages') || '[]');
+        const updatedMessages = allMessages.filter(m => m.id !== messageId);
+        localStorage.setItem('messages', JSON.stringify(updatedMessages));
+        fetchMessages();
+    }
+  };
   
   const handleAttachmentClick = () => {
     attachmentInputRef.current?.click();
@@ -789,9 +798,14 @@ const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ user, onLogout }) =
                                 <div className="p-3 border-b bg-white font-semibold text-primary-800 shadow-sm">
                                     Percakapan dengan: Admin ({adminUser.name})
                                 </div>
-                                <div ref={chatContainerRef} className="flex-1 p-4 overflow-y-auto space-y-4">
+                                <div ref={chatContainerRef} className="flex-1 p-4 overflow-y-auto space-y-2">
                                     {currentConversation.map(msg => (
-                                        <div key={msg.id} className={`flex ${msg.senderId === user.id ? 'justify-end' : 'justify-start'}`}>
+                                        <div key={msg.id} className={`flex items-center group ${msg.senderId === user.id ? 'justify-end' : 'justify-start'}`}>
+                                             {msg.senderId === user.id && (
+                                                <button onClick={() => handleDeleteMessage(msg.id)} className="mr-2 text-gray-400 hover:text-red-500 opacity-0 group-hover:opacity-100 transition-opacity">
+                                                    <TrashIcon className="w-4 h-4" />
+                                                </button>
+                                            )}
                                             <div className={`max-w-xs lg:max-w-md p-3 rounded-lg ${msg.recipientId === 'all_teachers' ? 'bg-yellow-200 border border-yellow-300' : msg.senderId === user.id ? 'bg-primary-500 text-white' : 'bg-gray-200'}`}>
                                                 {msg.recipientId === 'all_teachers' && <p className="text-xs font-bold text-yellow-800 mb-1">PENGUMUMAN</p>}
                                                 {msg.attachment?.type.startsWith('image/') ? (
