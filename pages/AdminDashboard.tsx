@@ -288,7 +288,7 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ user, onLogout }) => {
       return u;
     });
     localStorage.setItem('users', JSON.stringify(updatedUsers));
-    if (updatedCurrentUser) sessionStorage.setItem('currentUser', JSON.stringify(updatedCurrentUser));
+    if (updatedCurrentUser) localStorage.setItem('currentUser', JSON.stringify(updatedCurrentUser));
     alert('Username dan/atau password admin berhasil diperbarui. Perubahan akan terlihat sepenuhnya setelah login kembali.');
     setAdminPassword('');
     setConfirmPassword('');
@@ -430,7 +430,7 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ user, onLogout }) => {
                     </div>
                   </div>
                 )}
-                {activeTab === 'admins' && (
+                {activeTab === 'admins' && user.id === 'admin01' && (
                   <div>
                     <div className="flex justify-between items-center mb-4">
                       <h2 className="text-xl font-semibold text-primary-700">Manajemen Admin</h2>
