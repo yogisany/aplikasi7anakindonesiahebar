@@ -43,3 +43,13 @@ export interface AdminReport {
   submittedAt: string; // ISO string
   reportData: any[][]; // The data structure for XLSX aoa_to_sheet
 }
+
+export interface Message {
+  id: string;
+  senderId: string;
+  senderName: string;
+  recipientId: string; // 'all_teachers' for admin broadcast, or a specific user ID
+  content: string;
+  timestamp: string; // ISO string
+  read: boolean;
+}

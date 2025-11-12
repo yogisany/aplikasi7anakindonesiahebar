@@ -28,6 +28,9 @@ const App: React.FC = () => {
     if (!localStorage.getItem('admin_reports')) {
         localStorage.setItem('admin_reports', JSON.stringify([]));
     }
+    if (!localStorage.getItem('messages')) {
+        localStorage.setItem('messages', JSON.stringify([]));
+    }
 
     // Check for logged in user in session storage
     const loggedInUser = sessionStorage.getItem('currentUser');

@@ -1,7 +1,7 @@
 
 
 import React, { useState, useEffect, useCallback, useRef } from 'react';
-import { User, Student, HabitRecord, Habit, Rating, RatingValue, AdminReport } from '../types';
+import { User, Student, HabitRecord, Habit, Rating, RatingValue, AdminReport, Message } from '../types';
 import Header from '../components/Header';
 import Button from '../components/Button';
 import Modal from '../components/Modal';
@@ -65,6 +65,12 @@ const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ user, onLogout }) =
   const [monthlyReportData, setMonthlyReportData] = useState<DailyReport[] | null>(null);
   const [reportMetadata, setReportMetadata] = useState<ReportMetadata | null>(null);
 
+  // Messaging State
+  const [messages, setMessages] = useState<Message[]>([]);
+  const [newMessage, setNewMessage] = useState('');
+  const [adminUser, setAdminUser] = useState<User | null>(null);
+  const chatContainerRef = useRef<HTMLDivElement>(null);
+
 
   const reportRef = useRef<HTMLDivElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -72,7 +78,6 @@ const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ user, onLogout }) =
   const fetchStudents = useCallback(() => {
     const allStudents: Student[] = JSON.parse(localStorage.getItem('students') || '[]');
     const teacherStudents = allStudents.filter(s => s.teacherId === user.id);
-    // Sort students with natural sorting for better ordering (e.g., "Siswa 2" before "Siswa 10")
     teacherStudents.sort((a, b) => a.name.localeCompare(b.name, 'id-ID', { numeric: true, sensitivity: 'base' }));
     setStudents(teacherStudents);
   }, [user.id]);
@@ -82,10 +87,19 @@ const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ user, onLogout }) =
       setRecords(allRecords);
   }, []);
 
+  const fetchMessages = useCallback(() => {
+    const allMessages: Message[] = JSON.parse(localStorage.getItem('messages') || '[]');
+    setMessages(allMessages);
+  }, []);
+
   useEffect(() => {
     fetchStudents();
     fetchRecords();
-  }, [fetchStudents, fetchRecords]);
+    fetchMessages();
+    const allUsers: User[] = JSON.parse(localStorage.getItem('users') || '[]');
+    const admin = allUsers.find(u => u.role === 'admin');
+    setAdminUser(admin || null);
+  }, [fetchStudents, fetchRecords, fetchMessages]);
 
   useEffect(() => {
       const record = records.find(r => r.studentId === selectedStudentId && r.date === selectedDate);
@@ -97,6 +111,12 @@ const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ user, onLogout }) =
           setHabitData(initialHabits);
       }
   }, [selectedStudentId, selectedDate, records]);
+
+  useEffect(() => {
+    if (chatContainerRef.current) {
+      chatContainerRef.current.scrollTop = chatContainerRef.current.scrollHeight;
+    }
+  }, [messages, activeTab]);
 
 
   // Student handlers
@@ -124,7 +144,6 @@ const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ user, onLogout }) =
       const updatedStudents = allStudents.map(s => s.id === editingStudent.id ? { ...s, ...studentFormData } : s);
       localStorage.setItem('students', JSON.stringify(updatedStudents));
     } else {
-      // FIX: Ensure unique ID generation by adding a random string.
       const newStudent: Student = { ...studentFormData, id: `student_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`, teacherId: user.id };
       allStudents.push(newStudent);
       localStorage.setItem('students', JSON.stringify(allStudents));
@@ -337,12 +356,11 @@ const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ user, onLogout }) =
               });
 
               return { studentName: student.name, habits };
-          }).sort((a, b) => a.studentName.localeCompare(b.studentName)); // Sort students alphabetically within the day's report
+          }).sort((a, b) => a.studentName.localeCompare(b.studentName)); 
           
           fullReport.push({ day, date: dateStr, studentRecords });
       }
       
-      // Sort the entire report by day to ensure chronological order.
       fullReport.sort((a, b) => a.day - b.day);
       setMonthlyReportData(fullReport);
   };
@@ -361,7 +379,6 @@ const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ user, onLogout }) =
     let currentRow = 0;
     const numCols = HABIT_NAMES.length + 2;
 
-    // Add main headers and configure merges
     sheetData.push(['Laporan Rekapitulasi Pemantauan Kebiasaan Siswa']);
     merges.push({ s: { r: currentRow, c: 0 }, e: { r: currentRow, c: numCols - 1 } });
     currentRow++;
@@ -374,10 +391,9 @@ const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ user, onLogout }) =
     merges.push({ s: { r: currentRow, c: 0 }, e: { r: currentRow, c: 1 } });
     currentRow++;
     
-    sheetData.push([]); // Spacer
+    sheetData.push([]);
     currentRow++;
 
-    // Add data for each day
     monthlyReportData.forEach(dailyData => {
         if (dailyData.studentRecords.length > 0) {
             sheetData.push([`TANGGAL ${dailyData.day}`]);
@@ -397,7 +413,7 @@ const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ user, onLogout }) =
                 sheetData.push(studentRow);
                 currentRow++;
             });
-            sheetData.push([]); // Spacer between days
+            sheetData.push([]);
             currentRow++;
         }
     });
@@ -405,12 +421,7 @@ const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ user, onLogout }) =
     const ws = XLSX.utils.aoa_to_sheet(sheetData);
     ws['!merges'] = merges;
 
-    // Set column widths
-    const colWidths = [
-        { wch: 5 }, // No
-        { wch: 30 }, // Nama
-        ...HABIT_NAMES.map(() => ({ wch: 25 })) // Habits
-    ];
+    const colWidths = [ { wch: 5 }, { wch: 30 }, ...HABIT_NAMES.map(() => ({ wch: 25 })) ];
     ws['!cols'] = colWidths;
 
     XLSX.utils.book_append_sheet(wb, ws, `Laporan ${monthName} ${year}`);
@@ -424,9 +435,7 @@ const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ user, onLogout }) =
           alert("Tidak ada data laporan untuk dikirim. Harap tampilkan laporan terlebih dahulu.");
           return;
       }
-
       const { className, monthName, year } = reportMetadata;
-      
       const sheetData: any[][] = [];
       
       sheetData.push(['Laporan Rekapitulasi Pemantauan Kebiasaan Siswa']);
@@ -439,13 +448,8 @@ const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ user, onLogout }) =
               sheetData.push([`TANGGAL ${dailyData.day}`]);
               const headerRow = ['No', 'Nama Peserta Didik', ...HABIT_NAMES];
               sheetData.push(headerRow);
-
               dailyData.studentRecords.forEach((record, index) => {
-                  const studentRow = [
-                      index + 1,
-                      record.studentName,
-                      ...HABIT_NAMES.map(habit => record.habits[habit])
-                  ];
+                  const studentRow = [ index + 1, record.studentName, ...HABIT_NAMES.map(habit => record.habits[habit]) ];
                   sheetData.push(studentRow);
               });
               sheetData.push([]); 
@@ -453,27 +457,53 @@ const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ user, onLogout }) =
       });
 
       const allReports: AdminReport[] = JSON.parse(localStorage.getItem('admin_reports') || '[]');
-      
       const newReport: AdminReport = {
           reportId: `report_${user.id}_${year}-${recapMonth.split('-')[1]}_${Date.now()}`,
-          teacherId: user.id,
-          teacherName: user.name,
-          className: className,
-          monthName: monthName,
-          year: year,
-          submittedAt: new Date().toISOString(),
-          reportData: sheetData,
+          teacherId: user.id, teacherName: user.name, className: className, monthName: monthName, year: year, submittedAt: new Date().toISOString(), reportData: sheetData,
       };
 
       allReports.push(newReport);
       localStorage.setItem('admin_reports', JSON.stringify(allReports));
-
       alert(`Laporan untuk ${monthName} ${year} berhasil dikirim ke admin.`);
   };
+  
+  const handleSendMessage = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!newMessage.trim() || !adminUser) return;
 
+    const allMessages: Message[] = JSON.parse(localStorage.getItem('messages') || '[]');
+    const message: Message = {
+        id: `msg_${Date.now()}`,
+        senderId: user.id,
+        senderName: user.name,
+        recipientId: adminUser.id,
+        content: newMessage,
+        timestamp: new Date().toISOString(),
+        read: false,
+    };
+    
+    allMessages.push(message);
+    localStorage.setItem('messages', JSON.stringify(allMessages));
+    
+    fetchMessages();
+    setNewMessage('');
+  };
 
+  const getFilteredMessages = () => {
+    if (!adminUser) return [];
+    return messages.filter(m => 
+        (m.senderId === user.id && m.recipientId === adminUser.id) ||
+        (m.senderId === adminUser.id && m.recipientId === user.id) ||
+        (m.recipientId === 'all_teachers' && m.senderId === adminUser.id)
+    ).sort((a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime());
+  };
+
+  const currentConversation = getFilteredMessages();
   const selectedRecord = records.find(r => r.studentId === selectedStudentId && r.date === selectedDate) || null;
   const selectedStudent = students.find(s => s.id === selectedStudentId);
+  
+  const tabClass = (tabName: string) => 
+      `${activeTab === tabName ? 'border-primary-500 text-primary-600' : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'} whitespace-nowrap py-4 px-1 border-b-2 font-medium text-sm`;
 
   return (
     <>
@@ -482,10 +512,11 @@ const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ user, onLogout }) =
         <div className="bg-white p-4 sm:p-6 rounded-lg shadow-md">
             <div className="border-b border-gray-200">
                 <nav className="-mb-px flex space-x-4 sm:space-x-8 overflow-x-auto" aria-label="Tabs">
-                    <button onClick={() => setActiveTab('students')} className={`${activeTab === 'students' ? 'border-primary-500 text-primary-600' : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'} whitespace-nowrap py-4 px-1 border-b-2 font-medium text-sm`}>Manajemen Peserta Didik</button>
-                    <button onClick={() => setActiveTab('tracker')} className={`${activeTab === 'tracker' ? 'border-primary-500 text-primary-600' : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'} whitespace-nowrap py-4 px-1 border-b-2 font-medium text-sm`}>Input & Grafik</button>
-                    <button onClick={() => setActiveTab('recap')} className={`${activeTab === 'recap' ? 'border-primary-500 text-primary-600' : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'} whitespace-nowrap py-4 px-1 border-b-2 font-medium text-sm`}>Rekap & Ekspor</button>
-                    <button onClick={() => setActiveTab('donation')} className={`${activeTab === 'donation' ? 'border-primary-500 text-primary-600' : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'} whitespace-nowrap py-4 px-1 border-b-2 font-medium text-sm`}>Developer</button>
+                    <button onClick={() => setActiveTab('students')} className={tabClass('students')}>Manajemen Peserta Didik</button>
+                    <button onClick={() => setActiveTab('tracker')} className={tabClass('tracker')}>Input & Grafik</button>
+                    <button onClick={() => setActiveTab('recap')} className={tabClass('recap')}>Rekap & Ekspor</button>
+                    <button onClick={() => setActiveTab('messages')} className={tabClass('messages')}>Pesan</button>
+                    <button onClick={() => setActiveTab('donation')} className={tabClass('donation')}>Developer</button>
                 </nav>
             </div>
             
@@ -507,10 +538,7 @@ const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ user, onLogout }) =
                                         <Button onClick={handleConfirmBulkDelete} variant="danger" disabled={selectedStudents.size === 0}>
                                             Hapus ({selectedStudents.size}) Siswa
                                         </Button>
-                                        <Button onClick={() => {
-                                            setIsBulkDeleteMode(false);
-                                            setSelectedStudents(new Set());
-                                        }} variant="secondary">Batal</Button>
+                                        <Button onClick={() => { setIsBulkDeleteMode(false); setSelectedStudents(new Set()); }} variant="secondary">Batal</Button>
                                     </>
                                 )}
                             </div>
@@ -518,33 +546,17 @@ const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ user, onLogout }) =
                         <p className="text-sm text-gray-500 mb-4">
                             Untuk import, siapkan file Excel dengan kolom header: <strong>No</strong>, <strong>Nama</strong>, <strong>NISN</strong>, <strong>Kelas</strong>. Hanya kolom <strong>Nama</strong> yang wajib diisi.
                         </p>
-                        <input
-                            type="file"
-                            ref={fileInputRef}
-                            onChange={handleFileImport}
-                            className="hidden"
-                            accept=".xlsx, .xls"
-                        />
+                        <input type="file" ref={fileInputRef} onChange={handleFileImport} className="hidden" accept=".xlsx, .xls"/>
                         <div className="overflow-x-auto">
                             <table className="w-full text-left">
                               <thead className="bg-primary-100">
                                 <tr>
                                   {isBulkDeleteMode && (
                                     <th className="p-3 w-12 text-center">
-                                      <input
-                                        type="checkbox"
-                                        className="h-5 w-5 text-primary-600 border-gray-300 rounded focus:ring-primary-500"
-                                        onChange={handleSelectAll}
-                                        checked={students.length > 0 && selectedStudents.size === students.length}
-                                        aria-label="Pilih semua siswa"
-                                      />
+                                      <input type="checkbox" className="h-5 w-5 text-primary-600 border-gray-300 rounded focus:ring-primary-500" onChange={handleSelectAll} checked={students.length > 0 && selectedStudents.size === students.length} aria-label="Pilih semua siswa"/>
                                     </th>
                                   )}
-                                  <th className="p-3 w-12">No.</th>
-                                  <th className="p-3">Nama</th>
-                                  <th className="p-3">NISN</th>
-                                  <th className="p-3">Kelas</th>
-                                  <th className="p-3">Aksi</th>
+                                  <th className="p-3 w-12">No.</th><th className="p-3">Nama</th><th className="p-3">NISN</th><th className="p-3">Kelas</th><th className="p-3">Aksi</th>
                                 </tr>
                               </thead>
                               <tbody>
@@ -552,19 +564,10 @@ const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ user, onLogout }) =
                                   <tr key={s.id} className="border-b hover:bg-gray-50">
                                     {isBulkDeleteMode && (
                                       <td className="p-3 text-center">
-                                        <input
-                                          type="checkbox"
-                                          className="h-5 w-5 text-primary-600 border-gray-300 rounded focus:ring-primary-500"
-                                          checked={selectedStudents.has(s.id)}
-                                          onChange={() => handleSelectStudent(s.id)}
-                                          aria-label={`Pilih ${s.name}`}
-                                        />
+                                        <input type="checkbox" className="h-5 w-5 text-primary-600 border-gray-300 rounded focus:ring-primary-500" checked={selectedStudents.has(s.id)} onChange={() => handleSelectStudent(s.id)} aria-label={`Pilih ${s.name}`}/>
                                       </td>
                                     )}
-                                    <td className="p-3 text-center">{index + 1}</td>
-                                    <td className="p-3">{s.name}</td>
-                                    <td className="p-3">{s.nisn}</td>
-                                    <td className="p-3">{s.class}</td>
+                                    <td className="p-3 text-center">{index + 1}</td><td className="p-3">{s.name}</td><td className="p-3">{s.nisn}</td><td className="p-3">{s.class}</td>
                                     <td className="p-3 flex gap-2">
                                       {!isBulkDeleteMode && (
                                         <>
@@ -620,11 +623,7 @@ const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ user, onLogout }) =
                                     <div className="mt-2 p-2 border rounded-md bg-white shadow-sm">
                                         <p className="font-bold">Arti Nilai Skala:</p>
                                         <ul className="list-none pl-0">
-                                            <li><strong>5</strong> = Sudah Terbiasa</li>
-                                            <li><strong>4</strong> = Terbiasa</li>
-                                            <li><strong>3</strong> = Belum Terbiasa</li>
-                                            <li><strong>2</strong> = Kurang Terbiasa</li>
-                                            <li><strong>1</strong> = Sangat Tidak Terbiasa</li>
+                                            <li><strong>5</strong> = Sudah Terbiasa</li><li><strong>4</strong> = Terbiasa</li><li><strong>3</strong> = Belum Terbiasa</li><li><strong>2</strong> = Kurang Terbiasa</li><li><strong>1</strong> = Sangat Tidak Terbiasa</li>
                                         </ul>
                                     </div>
                                 </div>
@@ -669,9 +668,7 @@ const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ user, onLogout }) =
                                                         <tr className="text-center">
                                                             <th className="p-2 border border-gray-300">No</th>
                                                             <th className="p-2 border border-gray-300" style={{minWidth: '150px'}}>Nama Peserta Didik</th>
-                                                            {HABIT_NAMES.map(habit => (
-                                                                <th key={habit} className="p-2 border border-gray-300">{habit.replace(' ', '\n')}</th>
-                                                            ))}
+                                                            {HABIT_NAMES.map(habit => (<th key={habit} className="p-2 border border-gray-300">{habit.replace(' ', '\n')}</th>))}
                                                         </tr>
                                                     </thead>
                                                     <tbody>
@@ -680,9 +677,7 @@ const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ user, onLogout }) =
                                                                 <td className="p-2 border border-gray-300 text-center">{index + 1}</td>
                                                                 <td className="p-2 border border-gray-300 font-medium">{data.studentName}</td>
                                                                 {HABIT_NAMES.map(habit => (
-                                                                    <td key={habit} className="p-2 border border-gray-300 text-center">
-                                                                        {data.habits[habit]}
-                                                                    </td>
+                                                                    <td key={habit} className="p-2 border border-gray-300 text-center">{data.habits[habit]}</td>
                                                                 ))}
                                                             </tr>
                                                         ))}
@@ -694,22 +689,52 @@ const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ user, onLogout }) =
                                     {monthlyReportData.length === 0 && <p className="text-center text-gray-500 py-4">Tidak ada data ditemukan untuk periode ini.</p>}
                                 </div>
                                 <div className="text-center flex justify-center gap-4">
-                                    <Button 
-                                        onClick={handleSendToAdmin}
-                                    >
-                                        Kirim Laporan ke Admin
-                                    </Button>
-                                    <Button 
-                                        onClick={handleExportClassExcel} 
-                                        variant="secondary" 
-                                        className="!bg-green-600 hover:!bg-green-700 focus:!ring-green-500"
-                                    >
-                                        Ekspor Laporan Kelas (Excel)
-                                    </Button>
+                                    <Button onClick={handleSendToAdmin}>Kirim Laporan ke Admin</Button>
+                                    <Button onClick={handleExportClassExcel} variant="secondary" className="!bg-green-600 hover:!bg-green-700 focus:!ring-green-500">Ekspor Laporan Kelas (Excel)</Button>
                                 </div>
                             </div>
                         )}
                     </div>
+                )}
+                {activeTab === 'messages' && (
+                  <div className="space-y-4">
+                    <h2 className="text-xl font-semibold text-primary-700">Pesan dengan Admin</h2>
+                    <div className="flex flex-col border rounded-lg h-[60vh] bg-gray-50">
+                        {adminUser ? (
+                            <>
+                                <div className="p-3 border-b bg-white font-semibold text-primary-800 shadow-sm">
+                                    Percakapan dengan: Admin ({adminUser.name})
+                                </div>
+                                <div ref={chatContainerRef} className="flex-1 p-4 overflow-y-auto space-y-4">
+                                    {currentConversation.map(msg => (
+                                        <div key={msg.id} className={`flex ${msg.senderId === user.id ? 'justify-end' : 'justify-start'}`}>
+                                            <div className={`max-w-xs lg:max-w-md p-3 rounded-lg ${msg.recipientId === 'all_teachers' ? 'bg-yellow-200 border border-yellow-300' : msg.senderId === user.id ? 'bg-primary-500 text-white' : 'bg-gray-200'}`}>
+                                                {msg.recipientId === 'all_teachers' && <p className="text-xs font-bold text-yellow-800 mb-1">PENGUMUMAN</p>}
+                                                <p className="text-sm">{msg.content}</p>
+                                                <p className={`text-xs mt-1 ${msg.senderId === user.id ? 'text-blue-100' : 'text-gray-500'}`}>{new Date(msg.timestamp).toLocaleTimeString('id-ID', { hour: '2-digit', minute:'2-digit' })}</p>
+                                            </div>
+                                        </div>
+                                    ))}
+                                </div>
+                                <form onSubmit={handleSendMessage} className="p-3 border-t bg-white flex gap-2">
+                                    <input
+                                        type="text"
+                                        value={newMessage}
+                                        onChange={(e) => setNewMessage(e.target.value)}
+                                        placeholder="Ketik balasan untuk admin..."
+                                        className="flex-1 px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-primary-500 focus:border-primary-500"
+                                        autoComplete="off"
+                                    />
+                                    <Button type="submit">Kirim</Button>
+                                </form>
+                            </>
+                        ) : (
+                            <div className="flex-1 flex items-center justify-center text-gray-500">
+                                Tidak dapat memuat percakapan. Akun admin tidak ditemukan.
+                            </div>
+                        )}
+                    </div>
+                  </div>
                 )}
                  {activeTab === 'donation' && (
                     <div className="space-y-6 text-center max-w-3xl mx-auto">
@@ -720,19 +745,13 @@ const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ user, onLogout }) =
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-8 pt-4">
                             <div className="p-6 border rounded-lg shadow-sm bg-primary-50">
                                 <h3 className="text-xl font-semibold mb-4 text-primary-800">Scan QRIS</h3>
-                                <img 
-                                    src="https://i.ibb.co.com/YT4dT6cK/KODE-QRIS-YOGI-SANY.jpg"
-                                    alt="QRIS Code for Donation" 
-                                    className="w-100 h-100 mx-auto" 
-                                />
+                                <img src="https://i.ibb.co.com/YT4dT6cK/KODE-QRIS-YOGI-SANY.jpg" alt="QRIS Code for Donation" className="w-100 h-100 mx-auto" />
                                 <p className="text-sm mt-2 text-gray-500">Mendukung semua E-Wallet dan Mobile Banking.</p>
                             </div>
                             <div className="p-6 border rounded-lg shadow-sm bg-gray-50">
                                 <h3 className="text-xl font-semibold mb-4 text-gray-800">Transfer Bank</h3>
                                 <div className="text-left space-y-3">
-                                    <p><strong>Bank:</strong> Bank Central Asia (BCA)</p>
-                                    <p><strong>No. Rekening:</strong> 1393738034</p>
-                                    <p><strong>Atas Nama:</strong> Yogi Sany</p>
+                                    <p><strong>Bank:</strong> Bank Central Asia (BCA)</p><p><strong>No. Rekening:</strong> 1393738034</p><p><strong>Atas Nama:</strong> Yogi Sany</p>
                                 </div>
                             </div>
                         </div>
@@ -747,22 +766,10 @@ const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ user, onLogout }) =
 
       <Modal isOpen={isStudentModalOpen} onClose={handleCloseStudentModal} title={editingStudent ? 'Edit Siswa' : 'Tambah Siswa'}>
         <form onSubmit={handleStudentSubmit} className="space-y-4">
-          <div>
-            <label htmlFor="name" className="block text-sm font-medium text-gray-700">Nama</label>
-            <input type="text" name="name" id="name" value={studentFormData.name} onChange={handleStudentFormChange} required className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-primary-500 focus:border-primary-500" />
-          </div>
-          <div>
-            <label htmlFor="nisn" className="block text-sm font-medium text-gray-700">NISN</label>
-            <input type="text" name="nisn" id="nisn" value={studentFormData.nisn} onChange={handleStudentFormChange} className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-primary-500 focus:border-primary-500" />
-          </div>
-           <div>
-            <label htmlFor="class" className="block text-sm font-medium text-gray-700">Kelas</label>
-            <input type="text" name="class" id="class" value={studentFormData.class} onChange={handleStudentFormChange} required className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-primary-500 focus:border-primary-500" />
-          </div>
-          <div className="flex justify-end gap-2 pt-4">
-            <Button type="button" variant="secondary" onClick={handleCloseStudentModal}>Batal</Button>
-            <Button type="submit">Simpan</Button>
-          </div>
+          <div><label htmlFor="name" className="block text-sm font-medium text-gray-700">Nama</label><input type="text" name="name" id="name" value={studentFormData.name} onChange={handleStudentFormChange} required className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-primary-500 focus:border-primary-500" /></div>
+          <div><label htmlFor="nisn" className="block text-sm font-medium text-gray-700">NISN</label><input type="text" name="nisn" id="nisn" value={studentFormData.nisn} onChange={handleStudentFormChange} className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-primary-500 focus:border-primary-500" /></div>
+          <div><label htmlFor="class" className="block text-sm font-medium text-gray-700">Kelas</label><input type="text" name="class" id="class" value={studentFormData.class} onChange={handleStudentFormChange} required className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-primary-500 focus:border-primary-500" /></div>
+          <div className="flex justify-end gap-2 pt-4"><Button type="button" variant="secondary" onClick={handleCloseStudentModal}>Batal</Button><Button type="submit">Simpan</Button></div>
         </form>
       </Modal>
     </>
