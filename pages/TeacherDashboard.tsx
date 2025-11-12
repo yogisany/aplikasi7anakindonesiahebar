@@ -1,7 +1,7 @@
 
 
 import React, { useState, useEffect, useCallback, useRef } from 'react';
-import { User, Student, HabitRecord, Habit, Rating, RatingValue } from '../types';
+import { User, Student, HabitRecord, Habit, Rating, RatingValue, AdminReport } from '../types';
 import Header from '../components/Header';
 import Button from '../components/Button';
 import Modal from '../components/Modal';
@@ -347,46 +347,98 @@ const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ user, onLogout }) =
       setMonthlyReportData(fullReport);
   };
   
-    const handleExportClassExcel = () => {
+  const handleExportClassExcel = () => {
+    if (!monthlyReportData || !reportMetadata) {
+        alert("Tidak ada data laporan untuk diekspor. Harap tampilkan laporan terlebih dahulu.");
+        return;
+    }
+
+    const { className, monthName, year } = reportMetadata;
+    
+    const wb = XLSX.utils.book_new();
+    const sheetData: any[][] = [];
+    const merges: any[] = [];
+    let currentRow = 0;
+    const numCols = HABIT_NAMES.length + 2;
+
+    // Add main headers and configure merges
+    sheetData.push(['Laporan Rekapitulasi Pemantauan Kebiasaan Siswa']);
+    merges.push({ s: { r: currentRow, c: 0 }, e: { r: currentRow, c: numCols - 1 } });
+    currentRow++;
+    
+    sheetData.push([`Bulan: ${monthName} ${year}`]);
+    merges.push({ s: { r: currentRow, c: 0 }, e: { r: currentRow, c: numCols - 1 } });
+    currentRow++;
+
+    sheetData.push([`Kelas: ${className}`, '', `Guru: ${user.name}`]);
+    merges.push({ s: { r: currentRow, c: 0 }, e: { r: currentRow, c: 1 } });
+    currentRow++;
+    
+    sheetData.push([]); // Spacer
+    currentRow++;
+
+    // Add data for each day
+    monthlyReportData.forEach(dailyData => {
+        if (dailyData.studentRecords.length > 0) {
+            sheetData.push([`TANGGAL ${dailyData.day}`]);
+            merges.push({ s: { r: currentRow, c: 0 }, e: { r: currentRow, c: numCols - 1 } });
+            currentRow++;
+            
+            const headerRow = ['No', 'Nama Peserta Didik', ...HABIT_NAMES];
+            sheetData.push(headerRow);
+            currentRow++;
+
+            dailyData.studentRecords.forEach((record, index) => {
+                const studentRow = [
+                    index + 1,
+                    record.studentName,
+                    ...HABIT_NAMES.map(habit => record.habits[habit])
+                ];
+                sheetData.push(studentRow);
+                currentRow++;
+            });
+            sheetData.push([]); // Spacer between days
+            currentRow++;
+        }
+    });
+
+    const ws = XLSX.utils.aoa_to_sheet(sheetData);
+    ws['!merges'] = merges;
+
+    // Set column widths
+    const colWidths = [
+        { wch: 5 }, // No
+        { wch: 30 }, // Nama
+        ...HABIT_NAMES.map(() => ({ wch: 25 })) // Habits
+    ];
+    ws['!cols'] = colWidths;
+
+    XLSX.utils.book_append_sheet(wb, ws, `Laporan ${monthName} ${year}`);
+
+    const fileName = `laporan-harian-kelas-${className.replace(/\s/g, '_')}-${monthName}-${year}.xlsx`;
+    XLSX.writeFile(wb, fileName);
+  };
+
+  const handleSendToAdmin = () => {
       if (!monthlyReportData || !reportMetadata) {
-          alert("Tidak ada data laporan untuk diekspor. Harap tampilkan laporan terlebih dahulu.");
+          alert("Tidak ada data laporan untuk dikirim. Harap tampilkan laporan terlebih dahulu.");
           return;
       }
 
       const { className, monthName, year } = reportMetadata;
       
-      const wb = XLSX.utils.book_new();
       const sheetData: any[][] = [];
-      const merges: any[] = [];
-      let currentRow = 0;
-      const numCols = HABIT_NAMES.length + 2;
-
-      // Add main headers and configure merges
+      
       sheetData.push(['Laporan Rekapitulasi Pemantauan Kebiasaan Siswa']);
-      merges.push({ s: { r: currentRow, c: 0 }, e: { r: currentRow, c: numCols - 1 } });
-      currentRow++;
-      
       sheetData.push([`Bulan: ${monthName} ${year}`]);
-      merges.push({ s: { r: currentRow, c: 0 }, e: { r: currentRow, c: numCols - 1 } });
-      currentRow++;
-
       sheetData.push([`Kelas: ${className}`, '', `Guru: ${user.name}`]);
-      merges.push({ s: { r: currentRow, c: 0 }, e: { r: currentRow, c: 1 } });
-      currentRow++;
-      
-      sheetData.push([]); // Spacer
-      currentRow++;
+      sheetData.push([]); 
 
-      // Add data for each day
       monthlyReportData.forEach(dailyData => {
           if (dailyData.studentRecords.length > 0) {
               sheetData.push([`TANGGAL ${dailyData.day}`]);
-              merges.push({ s: { r: currentRow, c: 0 }, e: { r: currentRow, c: numCols - 1 } });
-              currentRow++;
-              
               const headerRow = ['No', 'Nama Peserta Didik', ...HABIT_NAMES];
               sheetData.push(headerRow);
-              currentRow++;
 
               dailyData.studentRecords.forEach((record, index) => {
                   const studentRow = [
@@ -395,28 +447,28 @@ const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ user, onLogout }) =
                       ...HABIT_NAMES.map(habit => record.habits[habit])
                   ];
                   sheetData.push(studentRow);
-                  currentRow++;
               });
-              sheetData.push([]); // Spacer between days
-              currentRow++;
+              sheetData.push([]); 
           }
       });
 
-      const ws = XLSX.utils.aoa_to_sheet(sheetData);
-      ws['!merges'] = merges;
+      const allReports: AdminReport[] = JSON.parse(localStorage.getItem('admin_reports') || '[]');
+      
+      const newReport: AdminReport = {
+          reportId: `report_${user.id}_${year}-${recapMonth.split('-')[1]}_${Date.now()}`,
+          teacherId: user.id,
+          teacherName: user.name,
+          className: className,
+          monthName: monthName,
+          year: year,
+          submittedAt: new Date().toISOString(),
+          reportData: sheetData,
+      };
 
-      // Set column widths
-      const colWidths = [
-          { wch: 5 }, // No
-          { wch: 30 }, // Nama
-          ...HABIT_NAMES.map(() => ({ wch: 25 })) // Habits
-      ];
-      ws['!cols'] = colWidths;
+      allReports.push(newReport);
+      localStorage.setItem('admin_reports', JSON.stringify(allReports));
 
-      XLSX.utils.book_append_sheet(wb, ws, `Laporan ${monthName} ${year}`);
-
-      const fileName = `laporan-harian-kelas-${className.replace(/\s/g, '_')}-${monthName}-${year}.xlsx`;
-      XLSX.writeFile(wb, fileName);
+      alert(`Laporan untuk ${monthName} ${year} berhasil dikirim ke admin.`);
   };
 
 
@@ -642,6 +694,11 @@ const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ user, onLogout }) =
                                     {monthlyReportData.length === 0 && <p className="text-center text-gray-500 py-4">Tidak ada data ditemukan untuk periode ini.</p>}
                                 </div>
                                 <div className="text-center flex justify-center gap-4">
+                                    <Button 
+                                        onClick={handleSendToAdmin}
+                                    >
+                                        Kirim Laporan ke Admin
+                                    </Button>
                                     <Button 
                                         onClick={handleExportClassExcel} 
                                         variant="secondary" 

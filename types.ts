@@ -32,3 +32,14 @@ export interface HabitRecord {
   date: string; // YYYY-MM-DD
   habits: Record<Habit, Rating>;
 }
+
+export interface AdminReport {
+  reportId: string;
+  teacherId: string;
+  teacherName: string;
+  className: string;
+  monthName: string;
+  year: number;
+  submittedAt: string; // ISO string
+  reportData: any[][]; // The data structure for XLSX aoa_to_sheet
+}

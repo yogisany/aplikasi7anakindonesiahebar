@@ -1,5 +1,6 @@
+
 import React, { useState, useEffect, useCallback, useRef } from 'react';
-import { User, Student, HabitRecord } from '../types';
+import { User, Student, HabitRecord, AdminReport } from '../types';
 import Header from '../components/Header';
 import Button from '../components/Button';
 import Modal from '../components/Modal';
@@ -26,6 +27,7 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ user, onLogout }) => {
   const [adminUsername, setAdminUsername] = useState(user.username);
   const [adminPassword, setAdminPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
+  const [submittedReports, setSubmittedReports] = useState<AdminReport[]>([]);
 
 
   const fetchTeachers = useCallback(() => {
@@ -33,9 +35,17 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ user, onLogout }) => {
     setTeachers(allUsers.filter(u => u.role === 'teacher'));
   }, []);
 
+  const fetchSubmittedReports = useCallback(() => {
+      const allReports: AdminReport[] = JSON.parse(localStorage.getItem('admin_reports') || '[]');
+      // Sort by newest first
+      allReports.sort((a, b) => new Date(b.submittedAt).getTime() - new Date(a.submittedAt).getTime());
+      setSubmittedReports(allReports);
+  }, []);
+
   useEffect(() => {
     fetchTeachers();
-  }, [fetchTeachers]);
+    fetchSubmittedReports();
+  }, [fetchTeachers, fetchSubmittedReports]);
 
   const handleOpenModal = (teacher: User | null = null) => {
     if (teacher) {
@@ -217,6 +227,41 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ user, onLogout }) => {
     setConfirmPassword('');
   };
 
+  const handleDownloadReport = (report: AdminReport) => {
+    const wb = XLSX.utils.book_new();
+    const sheetData = report.reportData;
+    const merges: any[] = [];
+    
+    const habitHeadersRow = sheetData.find(row => row.includes('Nama Peserta Didik')) || [];
+    const numCols = (habitHeadersRow.length || 3) - 1;
+
+    merges.push({ s: { r: 0, c: 0 }, e: { r: 0, c: numCols } }); // Main title
+    merges.push({ s: { r: 1, c: 0 }, e: { r: 1, c: numCols } }); // Month/Year
+    merges.push({ s: { r: 2, c: 0 }, e: { r: 2, c: 1 } }); // Class
+
+    sheetData.forEach((row, rowIndex) => {
+        if (String(row[0]).startsWith('TANGGAL')) {
+             merges.push({ s: { r: rowIndex, c: 0 }, e: { r: rowIndex, c: numCols } });
+        }
+    });
+
+    const ws = XLSX.utils.aoa_to_sheet(sheetData);
+    ws['!merges'] = merges;
+    
+    const colWidths = [
+        { wch: 5 }, // No
+        { wch: 30 }, // Nama
+        ...habitHeadersRow.slice(2).map(() => ({ wch: 25 })) // Habits
+    ];
+    ws['!cols'] = colWidths;
+
+    XLSX.utils.book_append_sheet(wb, ws, `Laporan ${report.monthName} ${report.year}`);
+    
+    const fileName = `laporan_${report.className}_${report.teacherName}_${report.monthName}_${report.year}.xlsx`
+        .replace(/\s/g, '_');
+    XLSX.writeFile(wb, fileName);
+  };
+
 
   return (
     <>
@@ -279,6 +324,46 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ user, onLogout }) => {
               </tbody>
             </table>
           </div>
+        </div>
+
+        <div className="mt-6 bg-white p-6 rounded-lg shadow-md">
+            <h2 className="text-xl font-semibold text-primary-700 mb-4">Laporan Rekap Guru</h2>
+            <div className="overflow-x-auto">
+                <table className="w-full text-left">
+                    <thead className="bg-primary-100">
+                        <tr>
+                            <th className="p-3">No.</th>
+                            <th className="p-3">Nama Guru</th>
+                            <th className="p-3">Kelas</th>
+                            <th className="p-3">Periode Laporan</th>
+                            <th className="p-3">Tanggal Kirim</th>
+                            <th className="p-3">Aksi</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {submittedReports.length > 0 ? submittedReports.map((report, index) => (
+                            <tr key={report.reportId} className="border-b hover:bg-gray-50">
+                                <td className="p-3">{index + 1}</td>
+                                <td className="p-3">{report.teacherName}</td>
+                                <td className="p-3">{report.className}</td>
+                                <td className="p-3">{report.monthName} {report.year}</td>
+                                <td className="p-3">{new Date(report.submittedAt).toLocaleString('id-ID')}</td>
+                                <td className="p-3">
+                                    <Button onClick={() => handleDownloadReport(report)} variant="secondary" className="!text-sm !py-1 !px-2">
+                                        Unduh Laporan
+                                    </Button>
+                                </td>
+                            </tr>
+                        )) : (
+                            <tr>
+                                <td colSpan={6} className="p-4 text-center text-gray-500">
+                                    Belum ada laporan yang dikirim oleh guru.
+                                </td>
+                            </tr>
+                        )}
+                    </tbody>
+                </table>
+            </div>
         </div>
 
         <div className="mt-6 bg-white p-6 rounded-lg shadow-md">
