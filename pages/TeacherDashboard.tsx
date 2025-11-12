@@ -12,6 +12,7 @@ import EmojiIcon from '../components/icons/EmojiIcon';
 import AttachmentIcon from '../components/icons/AttachmentIcon';
 import DownloadIcon from '../components/icons/DownloadIcon';
 import { HABIT_NAMES, RATING_OPTIONS, RATING_DESCRIPTION_MAP } from '../constants';
+import { apiRequest } from '../utils/mockApi';
 
 // Declare XLSX from global scope
 declare const XLSX: any;
@@ -35,16 +36,6 @@ interface ReportMetadata {
   year: number;
   className: string;
 }
-
-// Helper for placeholder API calls
-const apiRequest = async (url: string, options: RequestInit = {}) => {
-  console.log(`Making API request to ${url}`, options);
-  // This simulation will not return data, so the UI will appear empty.
-  await new Promise(resolve => setTimeout(resolve, 300));
-  if (options.method === 'GET' || !options.method) return [];
-  return { success: true };
-};
-
 
 interface TeacherDashboardProps {
   user: User;
@@ -94,7 +85,6 @@ const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ user, onLogout }) =
   const fetchStudents = useCallback(async () => {
     try {
       const data = await apiRequest(`/students?teacherId=${user.id}`);
-      // FIX: Ensure data is an array before using array methods, as apiRequest can return an object for non-GET requests.
       if (Array.isArray(data)) {
         data.sort((a: Student, b: Student) => a.name.localeCompare(b.name, 'id-ID', { numeric: true, sensitivity: 'base' }));
         setStudents(data);
@@ -108,7 +98,6 @@ const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ user, onLogout }) =
   const fetchRecords = useCallback(async () => {
     try {
         const data = await apiRequest(`/habits?teacherId=${user.id}`);
-        // FIX: Ensure data is an array before setting state, as apiRequest can return an object for non-GET requests.
         if (Array.isArray(data)) {
           setRecords(data);
         }
@@ -121,12 +110,9 @@ const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ user, onLogout }) =
   const fetchMessages = useCallback(async () => {
     try {
         const data = await apiRequest(`/messages?userId=${user.id}`);
-        // FIX: Ensure data is an array before setting state and using array methods, as apiRequest can return an object for non-GET requests.
         if (Array.isArray(data)) {
           setMessages(data);
-          const hasUnread = data.some((msg: Message) => 
-              (msg.recipientId === user.id || msg.recipientId === 'all_teachers') && !msg.read
-          );
+          const hasUnread = data.some((msg: Message) => !msg.read );
           setHasUnreadMessages(hasUnread);
         }
     } catch (error) {
@@ -136,10 +122,11 @@ const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ user, onLogout }) =
 
   const fetchAdminUser = useCallback(async () => {
     try {
-        const admins = await apiRequest('/admins?main=true');
-        // FIX: Ensure data is an array before accessing elements, as apiRequest can return an object for non-GET requests.
+        const admins = await apiRequest('/users?role=admin');
         if (Array.isArray(admins)) {
-          setAdminUser(admins[0] || null);
+          // Find main admin or first admin
+          const mainAdmin = admins.find(a => a.id === 'admin01') || admins[0];
+          setAdminUser(mainAdmin || null);
         }
     } catch (error) {
         console.error("Failed to fetch admin user:", error);
@@ -187,7 +174,6 @@ const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ user, onLogout }) =
       try {
         await apiRequest('/messages/read/all', {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ userId: user.id })
         });
         fetchMessages(); // Refetch to update UI and state
@@ -222,13 +208,11 @@ const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ user, onLogout }) =
         if (editingStudent) {
             await apiRequest(`/students/${editingStudent.id}`, {
                 method: 'PUT',
-                headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ ...studentFormData, teacherId: user.id })
             });
         } else {
             await apiRequest('/students', {
                 method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ ...studentFormData, teacherId: user.id })
             });
         }
@@ -285,7 +269,6 @@ const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ user, onLogout }) =
           try {
               await apiRequest('/students/bulk-delete', {
                   method: 'POST',
-                  headers: { 'Content-Type': 'application/json' },
                   body: JSON.stringify({ ids: Array.from(selectedStudents) })
               });
               fetchStudents();
@@ -327,7 +310,7 @@ const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ user, onLogout }) =
             const json: any[] = XLSX.utils.sheet_to_json(worksheet);
 
             if (json.length > 0 && json[0].Nama === undefined) {
-                alert("Format Excel tidak sesuai.");
+                alert("Format Excel tidak sesuai. Pastikan header kolom adalah 'Nama', 'NISN', dan 'Kelas'.");
                 return;
             }
 
@@ -345,7 +328,6 @@ const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ user, onLogout }) =
             
             await apiRequest('/students/bulk-import', {
                 method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify(newStudents)
             });
 
@@ -375,7 +357,6 @@ const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ user, onLogout }) =
       try {
           await apiRequest('/habits', {
               method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
               body: JSON.stringify({
                   studentId: selectedStudentId,
                   date: selectedDate,
@@ -499,7 +480,6 @@ const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ user, onLogout }) =
       try {
           await apiRequest('/reports', {
               method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
               body: JSON.stringify({
                   teacherId: user.id, teacherName: user.name, className, monthName, year,
                   reportData: sheetData,
@@ -518,13 +498,12 @@ const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ user, onLogout }) =
     if (!adminUser) return;
 
     try {
-        const messagePayload: Omit<Message, 'id' | 'timestamp' | 'read'> = {
+        const messagePayload = {
             senderId: user.id, senderName: user.name, recipientId: adminUser.id,
             content: newMessage, attachment: attachment || undefined,
         };
         await apiRequest('/messages', {
             method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify(messagePayload)
         });
         

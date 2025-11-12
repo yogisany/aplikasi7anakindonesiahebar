@@ -10,27 +10,13 @@ import TrashIcon from '../components/icons/TrashIcon';
 import EmojiIcon from '../components/icons/EmojiIcon';
 import AttachmentIcon from '../components/icons/AttachmentIcon';
 import DownloadIcon from '../components/icons/DownloadIcon';
+import { apiRequest } from '../utils/mockApi';
 
 // Declare XLSX from global scope
 declare const XLSX: any;
 
 const EMOJIS = ['😀', '😂', '😍', '👍', '🙏', '😊', '🤔', '🎉', '🚀', '❤️'];
 const STICKERS = ['👋', '💯', '🔥', '✨', '👌'];
-
-// Helper for placeholder API calls
-const apiRequest = async (url: string, options: RequestInit = {}) => {
-  console.log(`Making API request to ${url}`, options);
-  // In a real app, this would be a fetch call to your backend.
-  // Example:
-  // const response = await fetch(`https://your-backend-url.com/api${url}`, options);
-  // if (!response.ok) throw new Error('Network response was not ok');
-  // return response.json();
-  
-  // This simulation will not return data, so the UI will appear empty.
-  await new Promise(resolve => setTimeout(resolve, 300));
-  if (options.method === 'GET' || !options.method) return [];
-  return { success: true };
-};
 
 
 interface AdminDashboardProps {
@@ -46,6 +32,7 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ user, onLogout }) => {
   const [isTeacherModalOpen, setIsTeacherModalOpen] = useState(false);
   const [editingTeacher, setEditingTeacher] = useState<User | null>(null);
   const [teacherFormData, setTeacherFormData] = useState({ id: '', name: '', username: '', password: '', nip: '', kelas: '' });
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   // Admin Management State
   const [admins, setAdmins] = useState<User[]>([]);
@@ -76,8 +63,7 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ user, onLogout }) => {
 
   const fetchTeachers = useCallback(async () => {
     try {
-      const data = await apiRequest('/teachers');
-      // FIX: Ensure data is an array before setting state, as apiRequest can return an object for non-GET requests.
+      const data = await apiRequest('/users?role=teacher');
       if (Array.isArray(data)) {
         setTeachers(data);
       }
@@ -89,8 +75,7 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ user, onLogout }) => {
   
   const fetchAdmins = useCallback(async () => {
     try {
-      const data = await apiRequest('/admins');
-      // FIX: Ensure data is an array before using array methods, as apiRequest can return an object for non-GET requests.
+      const data = await apiRequest('/users?role=admin');
       if (Array.isArray(data)) {
         setAdmins(data.filter((a: User) => a.id !== user.id)); // Filter out self
       }
@@ -103,7 +88,6 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ user, onLogout }) => {
   const fetchSubmittedReports = useCallback(async () => {
     try {
         const data = await apiRequest('/reports');
-        // FIX: Ensure data is an array before using array methods, as apiRequest can return an object for non-GET requests.
         if (Array.isArray(data)) {
           setSubmittedReports(data.sort((a: AdminReport, b: AdminReport) => new Date(b.submittedAt).getTime() - new Date(a.submittedAt).getTime()));
         }
@@ -115,13 +99,12 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ user, onLogout }) => {
 
   const fetchMessages = useCallback(async () => {
     try {
-      const allMessages = await apiRequest(`/messages/${user.id}`);
-      // FIX: Ensure data is an array before setting state and using array methods, as apiRequest can return an object for non-GET requests.
+      const allMessages = await apiRequest(`/messages?recipientId=${user.id}`);
       if (Array.isArray(allMessages)) {
         setMessages(allMessages);
         const newUnreadSenders = new Set<string>();
         allMessages.forEach((msg: Message) => {
-            if (msg.recipientId === user.id && !msg.read) {
+            if (!msg.read) {
                 newUnreadSenders.add(msg.senderId);
             }
         });
@@ -158,7 +141,6 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ user, onLogout }) => {
       try {
         await apiRequest(`/messages/read`, {
             method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ senderId: selectedRecipientId, recipientId: user.id }),
         });
         fetchMessages();
@@ -199,29 +181,27 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ user, onLogout }) => {
     e.preventDefault();
     try {
       if (editingTeacher) {
-        await apiRequest(`/teachers/${editingTeacher.id}`, {
+        await apiRequest(`/users/${editingTeacher.id}`, {
           method: 'PUT',
-          headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify(teacherFormData),
         });
       } else {
-        await apiRequest('/teachers', {
+        await apiRequest('/users', {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(teacherFormData),
+          body: JSON.stringify({ ...teacherFormData, role: 'teacher' }),
         });
       }
       fetchTeachers();
       handleCloseTeacherModal();
-    } catch (error) {
+    } catch (error: any) {
       console.error("Failed to save teacher:", error);
-      alert("Gagal menyimpan data guru.");
+      alert(`Gagal menyimpan data guru: ${error.message}`);
     }
   };
   const handleDeleteTeacher = async (teacherId: string) => {
     if (window.confirm('Apakah Anda yakin ingin menghapus guru ini? Semua data terkait akan dihapus.')) {
       try {
-        await apiRequest(`/teachers/${teacherId}`, { method: 'DELETE' });
+        await apiRequest(`/users/${teacherId}`, { method: 'DELETE' });
         fetchTeachers();
         if (selectedRecipientId === teacherId) {
           setSelectedRecipientId(null);
@@ -232,6 +212,64 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ user, onLogout }) => {
       }
     }
   };
+
+  // Excel Handlers for Teachers
+  const handleDownloadTeacherTemplate = () => {
+    const headers = [['No', 'Nama', 'Username', 'Password', 'NIP', 'Kelas']];
+    const ws = XLSX.utils.aoa_to_sheet(headers);
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, 'Format Guru');
+    XLSX.writeFile(wb, 'format_import_guru.xlsx');
+  };
+
+  const handleImportTeacherClick = () => {
+    fileInputRef.current?.click();
+  };
+
+  const handleTeacherFileImport = (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (!file) return;
+
+    const reader = new FileReader();
+    reader.onload = async (e) => {
+        try {
+            const data = e.target?.result;
+            const workbook = XLSX.read(data, { type: 'array' });
+            const sheetName = workbook.SheetNames[0];
+            const worksheet = workbook.Sheets[sheetName];
+            const json: any[] = XLSX.utils.sheet_to_json(worksheet);
+
+            const newTeachers = json.map((row: any) => ({
+                name: String(row.Nama || '').trim(),
+                username: String(row.Username || '').trim(),
+                password: String(row.Password || '').trim(),
+                nip: String(row.NIP || '').trim(),
+                kelas: String(row.Kelas || '').trim(),
+                role: 'teacher',
+            })).filter(teacher => teacher.name && teacher.username && teacher.password);
+
+            if (newTeachers.length === 0) {
+                alert("Tidak ada data guru yang valid ditemukan. Pastikan kolom Nama, Username, dan Password terisi.");
+                return;
+            }
+            
+            await apiRequest('/users/bulk-import', {
+                method: 'POST',
+                body: JSON.stringify(newTeachers)
+            });
+
+            fetchTeachers();
+            alert(`${newTeachers.length} guru berhasil diimpor.`);
+        } catch (error) {
+            console.error("Error importing file:", error);
+            alert("Terjadi kesalahan saat mengimpor file.");
+        } finally {
+            if (event.target) event.target.value = '';
+        }
+    };
+    reader.readAsArrayBuffer(file);
+  };
+
 
   // Admin Handlers
   const handleOpenAdminModal = (admin: User | null = null) => {
@@ -253,29 +291,27 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ user, onLogout }) => {
       e.preventDefault();
       try {
         if (editingAdmin) {
-          await apiRequest(`/admins/${editingAdmin.id}`, {
+          await apiRequest(`/users/${editingAdmin.id}`, {
             method: 'PUT',
-            headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify(adminFormData),
           });
         } else {
-          await apiRequest('/admins', {
+          await apiRequest('/users', {
             method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(adminFormData),
+            body: JSON.stringify({...adminFormData, role: 'admin'}),
           });
         }
         fetchAdmins();
         handleCloseAdminModal();
-      } catch (error) {
+      } catch (error: any) {
         console.error("Failed to save admin:", error);
-        alert("Gagal menyimpan data admin.");
+        alert(`Gagal menyimpan data admin: ${error.message}`);
       }
   };
   const handleDeleteAdmin = async (adminId: string) => {
     if (window.confirm('Apakah Anda yakin ingin menghapus admin ini?')) {
         try {
-          await apiRequest(`/admins/${adminId}`, { method: 'DELETE' });
+          await apiRequest(`/users/${adminId}`, { method: 'DELETE' });
           fetchAdmins();
         } catch (error) {
           console.error("Failed to delete admin:", error);
@@ -296,13 +332,14 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ user, onLogout }) => {
       if (accountPassword) {
         payload.password = accountPassword;
       }
-      await apiRequest(`/admins/me/${user.id}`, {
+      await apiRequest(`/users/${user.id}`, {
         method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(payload)
       });
-      alert('Informasi akun berhasil diperbarui. Anda mungkin perlu login kembali.');
-      // In a real app, the user object in context/state should be updated, and maybe the JWT token.
+      alert('Informasi akun berhasil diperbarui. Anda mungkin perlu login kembali untuk melihat perubahan.');
+       // Update user in localStorage to reflect changes immediately
+      const updatedUser = { ...user, name: accountName, username: accountUsername };
+      localStorage.setItem('currentUser', JSON.stringify(updatedUser));
     } catch (error) {
       console.error("Failed to update account:", error);
       alert("Gagal memperbarui akun.");
@@ -328,8 +365,7 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ user, onLogout }) => {
     }
 
     try {
-        // In a real app with file uploads, this would be a multipart/form-data request
-        const messagePayload: Omit<Message, 'id' | 'timestamp' | 'read'> = {
+        const messagePayload = {
             senderId: user.id,
             senderName: user.name,
             recipientId: selectedRecipientId,
@@ -338,7 +374,6 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ user, onLogout }) => {
         };
         await apiRequest('/messages', {
             method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify(messagePayload),
         });
         
@@ -429,10 +464,18 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ user, onLogout }) => {
             <div className="pt-6">
               {activeTab === 'teachers' && (
                 <div>
-                  <div className="flex justify-between items-center mb-4">
+                  <div className="flex flex-col sm:flex-row gap-4 justify-between items-start sm:items-center mb-2">
                     <h2 className="text-xl font-semibold text-primary-700">Data Guru</h2>
-                    <Button onClick={() => handleOpenTeacherModal()}><PlusIcon /><span>Tambah Guru</span></Button>
+                    <div className="flex gap-2 flex-wrap">
+                        <Button onClick={handleDownloadTeacherTemplate} variant="secondary">Unduh Format</Button>
+                        <Button onClick={handleImportTeacherClick} variant="secondary">Import Excel</Button>
+                        <Button onClick={() => handleOpenTeacherModal()}><PlusIcon /><span>Tambah Guru</span></Button>
+                    </div>
                   </div>
+                   <p className="text-sm text-gray-500 mb-4">
+                      Untuk import, siapkan file Excel dengan kolom header: <strong>No</strong>, <strong>Nama</strong>, <strong>Username</strong>, <strong>Password</strong>, <strong>NIP</strong>, <strong>Kelas</strong>. Kolom <strong>Nama</strong>, <strong>Username</strong> dan <strong>Password</strong> wajib diisi.
+                  </p>
+                  <input type="file" ref={fileInputRef} onChange={handleTeacherFileImport} className="hidden" accept=".xlsx, .xls"/>
                   <div className="overflow-x-auto">
                     <table className="w-full text-left">
                       <thead className="bg-primary-100">
@@ -475,7 +518,7 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ user, onLogout }) => {
                             <td className="p-3">{index + 1}</td><td className="p-3">{a.name}</td><td className="p-3">{a.username}</td>
                             <td className="p-3 flex gap-2">
                               <button onClick={() => handleOpenAdminModal(a)} className="text-primary-600 hover:text-primary-800"><EditIcon /></button>
-                              <button onClick={() => handleDeleteAdmin(a.id)} className="text-red-600 hover:text-red-800"><TrashIcon /></button>
+                              <button onClick={() => handleDeleteAdmin(a.id)} className="text-red-600 hover:text-red-800" disabled={a.id === user.id}><TrashIcon /></button>
                             </td>
                           </tr>
                         ))}

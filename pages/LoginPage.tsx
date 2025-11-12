@@ -2,6 +2,7 @@
 import React, { useState } from 'react';
 import { User } from '../types';
 import Button from '../components/Button';
+import { apiRequest } from '../utils/mockApi';
 
 interface LoginPageProps {
   onLogin: (user: User) => void;
@@ -19,26 +20,12 @@ const LoginPage: React.FC<LoginPageProps> = ({ onLogin }) => {
     setLoading(true);
 
     try {
-      // In a real application, you would replace this with a fetch request
-      // to your backend authentication endpoint.
-      // const response = await apiRequest('/auth/login', {
-      //   method: 'POST',
-      //   headers: { 'Content-Type': 'application/json' },
-      //   body: JSON.stringify({ username, password }),
-      // });
-      // const user = response.user;
+      const response = await apiRequest('/auth/login', {
+        method: 'POST',
+        body: JSON.stringify({ username, password }),
+      });
       
-      // --- START OF MOCK LOGIC FOR DEMONSTRATION ---
-      // This block simulates a successful login for specific users
-      // so you can navigate the app. It should be replaced by a real API call.
-      await new Promise(resolve => setTimeout(resolve, 500));
-      let user: User | null = null;
-      if (username === 'admin' && password === 'password') {
-        user = { id: 'admin01', name: 'Admin Utama', username: 'admin', password: 'password', role: 'admin' };
-      } else if (username === 'guru1' && password === 'password') {
-        user = { id: 'teacher01', name: 'Budi Hartono', username: 'guru1', password: 'password', role: 'teacher', nip: '12345', kelas: 'Kelas 1A' };
-      }
-      // --- END OF MOCK LOGIC ---
+      const user = response.user;
 
       if (user) {
         onLogin(user);
