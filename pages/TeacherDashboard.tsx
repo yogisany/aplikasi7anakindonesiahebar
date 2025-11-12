@@ -1,5 +1,4 @@
 
-
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { User, Student, HabitRecord, Habit, Rating, RatingValue, AdminReport, Message, Attachment } from '../types';
 import Header from '../components/Header';
@@ -12,11 +11,9 @@ import TrashIcon from '../components/icons/TrashIcon';
 import EmojiIcon from '../components/icons/EmojiIcon';
 import AttachmentIcon from '../components/icons/AttachmentIcon';
 import DownloadIcon from '../components/icons/DownloadIcon';
-import { HABIT_NAMES, RATING_MAP, RATING_OPTIONS, RATING_DESCRIPTION_MAP } from '../constants';
+import { HABIT_NAMES, RATING_OPTIONS, RATING_DESCRIPTION_MAP } from '../constants';
 
-// Declare jspdf and html2canvas from global scope
-declare const jspdf: any;
-declare const html2canvas: any;
+// Declare XLSX from global scope
 declare const XLSX: any;
 
 const EMOJIS = ['😀', '😂', '😍', '👍', '🙏', '😊', '🤔', '🎉', '🚀', '❤️'];
@@ -38,6 +35,16 @@ interface ReportMetadata {
   year: number;
   className: string;
 }
+
+// Helper for placeholder API calls
+const apiRequest = async (url: string, options: RequestInit = {}) => {
+  console.log(`Making API request to ${url}`, options);
+  // This simulation will not return data, so the UI will appear empty.
+  await new Promise(resolve => setTimeout(resolve, 300));
+  if (options.method === 'GET' || !options.method) return [];
+  return { success: true };
+};
+
 
 interface TeacherDashboardProps {
   user: User;
@@ -66,7 +73,7 @@ const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ user, onLogout }) =
       return initialHabits;
   });
   
-  // Recap State for new daily report format
+  // Recap State
   const [recapMonth, setRecapMonth] = useState(new Date().toISOString().substring(0, 7)); // YYYY-MM
   const [monthlyReportData, setMonthlyReportData] = useState<DailyReport[] | null>(null);
   const [reportMetadata, setReportMetadata] = useState<ReportMetadata | null>(null);
@@ -82,40 +89,69 @@ const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ user, onLogout }) =
   const emojiPickerRef = useRef<HTMLDivElement>(null);
   const attachmentInputRef = useRef<HTMLInputElement>(null);
 
-
-  const reportRef = useRef<HTMLDivElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  const fetchStudents = useCallback(() => {
-    const allStudents: Student[] = JSON.parse(localStorage.getItem('students') || '[]');
-    const teacherStudents = allStudents.filter(s => s.teacherId === user.id);
-    teacherStudents.sort((a, b) => a.name.localeCompare(b.name, 'id-ID', { numeric: true, sensitivity: 'base' }));
-    setStudents(teacherStudents);
+  const fetchStudents = useCallback(async () => {
+    try {
+      const data = await apiRequest(`/students?teacherId=${user.id}`);
+      // FIX: Ensure data is an array before using array methods, as apiRequest can return an object for non-GET requests.
+      if (Array.isArray(data)) {
+        data.sort((a: Student, b: Student) => a.name.localeCompare(b.name, 'id-ID', { numeric: true, sensitivity: 'base' }));
+        setStudents(data);
+      }
+    } catch (error) {
+        console.error("Failed to fetch students:", error);
+        alert("Gagal memuat data siswa.");
+    }
   }, [user.id]);
   
-  const fetchRecords = useCallback(() => {
-      const allRecords: HabitRecord[] = JSON.parse(localStorage.getItem('habit_records') || '[]');
-      setRecords(allRecords);
-  }, []);
-
-  const fetchMessages = useCallback(() => {
-    const allMessages: Message[] = JSON.parse(localStorage.getItem('messages') || '[]');
-    setMessages(allMessages);
-    
-    const hasUnread = allMessages.some(msg => 
-        (msg.recipientId === user.id || msg.recipientId === 'all_teachers') && !msg.read
-    );
-    setHasUnreadMessages(hasUnread);
+  const fetchRecords = useCallback(async () => {
+    try {
+        const data = await apiRequest(`/habits?teacherId=${user.id}`);
+        // FIX: Ensure data is an array before setting state, as apiRequest can return an object for non-GET requests.
+        if (Array.isArray(data)) {
+          setRecords(data);
+        }
+    } catch (error) {
+        console.error("Failed to fetch habit records:", error);
+        alert("Gagal memuat data kebiasaan.");
+    }
   }, [user.id]);
+
+  const fetchMessages = useCallback(async () => {
+    try {
+        const data = await apiRequest(`/messages?userId=${user.id}`);
+        // FIX: Ensure data is an array before setting state and using array methods, as apiRequest can return an object for non-GET requests.
+        if (Array.isArray(data)) {
+          setMessages(data);
+          const hasUnread = data.some((msg: Message) => 
+              (msg.recipientId === user.id || msg.recipientId === 'all_teachers') && !msg.read
+          );
+          setHasUnreadMessages(hasUnread);
+        }
+    } catch (error) {
+        console.error("Failed to fetch messages:", error);
+    }
+  }, [user.id]);
+
+  const fetchAdminUser = useCallback(async () => {
+    try {
+        const admins = await apiRequest('/admins?main=true');
+        // FIX: Ensure data is an array before accessing elements, as apiRequest can return an object for non-GET requests.
+        if (Array.isArray(admins)) {
+          setAdminUser(admins[0] || null);
+        }
+    } catch (error) {
+        console.error("Failed to fetch admin user:", error);
+    }
+  }, []);
 
   useEffect(() => {
     fetchStudents();
     fetchRecords();
     fetchMessages();
-    const allUsers: User[] = JSON.parse(localStorage.getItem('users') || '[]');
-    const admin = allUsers.find(u => u.role === 'admin');
-    setAdminUser(admin || null);
-  }, [fetchStudents, fetchRecords, fetchMessages]);
+    fetchAdminUser();
+  }, [fetchStudents, fetchRecords, fetchMessages, fetchAdminUser]);
 
   useEffect(() => {
       const record = records.find(r => r.studentId === selectedStudentId && r.date === selectedDate);
@@ -134,7 +170,6 @@ const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ user, onLogout }) =
     }
   }, [messages, activeTab]);
   
-  // Effect to close emoji picker on outside click
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
         if (emojiPickerRef.current && !emojiPickerRef.current.contains(event.target as Node)) {
@@ -147,26 +182,21 @@ const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ user, onLogout }) =
     };
   }, []);
 
-  const handleTabClick = (tabName: string) => {
+  const handleTabClick = async (tabName: string) => {
     if (tabName === 'messages' && hasUnreadMessages) {
-      const allMessages: Message[] = JSON.parse(localStorage.getItem('messages') || '[]');
-      let messagesUpdated = false;
-      const updatedMessages = allMessages.map(m => {
-          if ((m.recipientId === user.id || m.recipientId === 'all_teachers') && !m.read) {
-              messagesUpdated = true;
-              return { ...m, read: true };
-          }
-          return m;
-      });
-
-      if (messagesUpdated) {
-          localStorage.setItem('messages', JSON.stringify(updatedMessages));
-          fetchMessages(); // Refetch to update UI and state
+      try {
+        await apiRequest('/messages/read/all', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ userId: user.id })
+        });
+        fetchMessages(); // Refetch to update UI and state
+      } catch (error) {
+        console.error("Failed to mark all messages as read", error);
       }
     }
     setActiveTab(tabName);
   };
-
 
   // Student handlers
   const handleOpenStudentModal = (student: Student | null = null) => {
@@ -186,31 +216,40 @@ const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ user, onLogout }) =
     setStudentFormData(prev => ({ ...prev, [e.target.name]: e.target.value }));
   };
 
-  const handleStudentSubmit = (e: React.FormEvent) => {
+  const handleStudentSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    const allStudents: Student[] = JSON.parse(localStorage.getItem('students') || '[]');
-    if (editingStudent) {
-      const updatedStudents = allStudents.map(s => s.id === editingStudent.id ? { ...s, ...studentFormData } : s);
-      localStorage.setItem('students', JSON.stringify(updatedStudents));
-    } else {
-      const newStudent: Student = { ...studentFormData, id: `student_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`, teacherId: user.id };
-      allStudents.push(newStudent);
-      localStorage.setItem('students', JSON.stringify(allStudents));
+    try {
+        if (editingStudent) {
+            await apiRequest(`/students/${editingStudent.id}`, {
+                method: 'PUT',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ ...studentFormData, teacherId: user.id })
+            });
+        } else {
+            await apiRequest('/students', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ ...studentFormData, teacherId: user.id })
+            });
+        }
+        fetchStudents();
+        handleCloseStudentModal();
+    } catch (error) {
+        console.error("Failed to save student", error);
+        alert("Gagal menyimpan data siswa.");
     }
-    fetchStudents();
-    handleCloseStudentModal();
   };
 
-  const handleStudentDelete = (studentId: string) => {
+  const handleStudentDelete = async (studentId: string) => {
     if (window.confirm('Yakin hapus siswa? Ini akan menghapus semua data kebiasaannya.')) {
-      let allStudents: Student[] = JSON.parse(localStorage.getItem('students') || '[]');
-      let allRecords: HabitRecord[] = JSON.parse(localStorage.getItem('habit_records') || '[]');
-
-      localStorage.setItem('students', JSON.stringify(allStudents.filter(s => s.id !== studentId)));
-      localStorage.setItem('habit_records', JSON.stringify(allRecords.filter(r => r.studentId !== studentId)));
-
-      fetchStudents();
-      fetchRecords();
+        try {
+            await apiRequest(`/students/${studentId}`, { method: 'DELETE' });
+            fetchStudents();
+            fetchRecords();
+        } catch (error) {
+            console.error("Failed to delete student", error);
+            alert("Gagal menghapus siswa.");
+        }
     }
   };
 
@@ -236,28 +275,28 @@ const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ user, onLogout }) =
       }
   };
 
-  const handleConfirmBulkDelete = () => {
+  const handleConfirmBulkDelete = async () => {
       if (selectedStudents.size === 0) {
           alert('Tidak ada siswa yang dipilih.');
           return;
       }
 
-      if (window.confirm(`Yakin ingin menghapus ${selectedStudents.size} siswa? Tindakan ini tidak dapat dibatalkan dan akan menghapus semua data kebiasaan mereka.`)) {
-          let allStudents: Student[] = JSON.parse(localStorage.getItem('students') || '[]');
-          let allRecords: HabitRecord[] = JSON.parse(localStorage.getItem('habit_records') || '[]');
-
-          const updatedStudents = allStudents.filter(s => !selectedStudents.has(s.id));
-          const updatedRecords = allRecords.filter(r => !selectedStudents.has(r.studentId));
-
-          localStorage.setItem('students', JSON.stringify(updatedStudents));
-          localStorage.setItem('habit_records', JSON.stringify(updatedRecords));
-
-          fetchStudents();
-          fetchRecords();
-
-          alert(`${selectedStudents.size} siswa berhasil dihapus.`);
-          setIsBulkDeleteMode(false);
-          setSelectedStudents(new Set());
+      if (window.confirm(`Yakin ingin menghapus ${selectedStudents.size} siswa? Tindakan ini tidak dapat dibatalkan.`)) {
+          try {
+              await apiRequest('/students/bulk-delete', {
+                  method: 'POST',
+                  headers: { 'Content-Type': 'application/json' },
+                  body: JSON.stringify({ ids: Array.from(selectedStudents) })
+              });
+              fetchStudents();
+              fetchRecords();
+              alert(`${selectedStudents.size} siswa berhasil dihapus.`);
+              setIsBulkDeleteMode(false);
+              setSelectedStudents(new Set());
+          } catch (error) {
+              console.error("Failed to bulk delete students", error);
+              alert("Gagal menghapus siswa secara massal.");
+          }
       }
   };
 
@@ -279,7 +318,7 @@ const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ user, onLogout }) =
     if (!file) return;
 
     const reader = new FileReader();
-    reader.onload = (e) => {
+    reader.onload = async (e) => {
         try {
             const data = e.target?.result;
             const workbook = XLSX.read(data, { type: 'array' });
@@ -288,12 +327,11 @@ const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ user, onLogout }) =
             const json: any[] = XLSX.utils.sheet_to_json(worksheet);
 
             if (json.length > 0 && json[0].Nama === undefined) {
-                alert("Format Excel tidak sesuai. Pastikan sheet pertama setidaknya memiliki header kolom 'Nama'. Kolom 'No', 'NISN', dan 'Kelas' juga direkomendasikan.");
+                alert("Format Excel tidak sesuai.");
                 return;
             }
 
-            const newStudents: Student[] = json.map((row: any, index: number) => ({
-                id: `student_${Date.now()}_${index}_${row.NISN || Math.random().toString(36).substr(2, 9)}`,
+            const newStudents = json.map((row: any) => ({
                 name: String(row.Nama || '').trim(),
                 nisn: String(row.NISN || '').trim(),
                 class: String(row.Kelas || '').trim() || user.kelas || '',
@@ -301,23 +339,23 @@ const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ user, onLogout }) =
             })).filter(student => student.name);
 
             if (newStudents.length === 0) {
-                alert("Tidak ada data siswa yang valid ditemukan di dalam file. Pastikan ada data di bawah header 'Nama'.");
+                alert("Tidak ada data siswa yang valid ditemukan.");
                 return;
             }
-
-            const allStudents: Student[] = JSON.parse(localStorage.getItem('students') || '[]');
-            const updatedStudents = [...allStudents, ...newStudents];
-            localStorage.setItem('students', JSON.stringify(updatedStudents));
+            
+            await apiRequest('/students/bulk-import', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(newStudents)
+            });
 
             fetchStudents();
             alert(`${newStudents.length} siswa berhasil diimpor.`);
         } catch (error) {
             console.error("Error importing file:", error);
-            alert("Terjadi kesalahan saat mengimpor file. Pastikan file dalam format Excel yang benar.");
+            alert("Terjadi kesalahan saat mengimpor file.");
         } finally {
-            if (event.target) {
-                event.target.value = '';
-            }
+            if (event.target) event.target.value = '';
         }
     };
     reader.readAsArrayBuffer(file);
@@ -329,60 +367,51 @@ const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ user, onLogout }) =
       setHabitData(prev => ({ ...prev, [habit]: rating }));
   };
   
-  const handleHabitSubmit = () => {
+  const handleHabitSubmit = async () => {
       if(!selectedStudentId) {
           alert("Pilih siswa terlebih dahulu.");
           return;
       }
-      const allRecords: HabitRecord[] = JSON.parse(localStorage.getItem('habit_records') || '[]');
-      const recordIndex = allRecords.findIndex(r => r.studentId === selectedStudentId && r.date === selectedDate);
-      
-      if(recordIndex > -1) {
-          allRecords[recordIndex].habits = habitData;
-      } else {
-          allRecords.push({
-              id: `record_${Date.now()}`,
-              studentId: selectedStudentId,
-              date: selectedDate,
-              habits: habitData,
+      try {
+          await apiRequest('/habits', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                  studentId: selectedStudentId,
+                  date: selectedDate,
+                  habits: habitData
+              })
           });
+          fetchRecords();
+          alert("Data kebiasaan berhasil disimpan!");
+      } catch (error) {
+          console.error("Failed to save habit data:", error);
+          alert("Gagal menyimpan data kebiasaan.");
       }
-      localStorage.setItem('habit_records', JSON.stringify(allRecords));
-      fetchRecords();
-      alert("Data kebiasaan berhasil disimpan!");
   };
 
-  // Recap Handlers - NEW DAILY REPORT LOGIC
+  // Recap Handlers
   const handleGenerateClassReport = () => {
       if (students.length === 0) {
           alert("Tidak ada siswa di kelas Anda untuk membuat laporan.");
-          setMonthlyReportData(null);
-          setReportMetadata(null);
           return;
       }
-
       const [year, month] = recapMonth.split('-').map(Number);
       const daysInMonth = new Date(year, month, 0).getDate();
       const monthName = new Date(year, month - 1, 1).toLocaleString('id-ID', { month: 'long' });
 
       setReportMetadata({ monthName, year, className: user.kelas || '' });
       
-      const studentIds = students.map(s => s.id);
-      const recordsForMonth = records.filter(r => 
-          studentIds.includes(r.studentId) && r.date.startsWith(recapMonth)
-      );
+      const recordsForMonth = records.filter(r => r.date.startsWith(recapMonth));
       
       const recordsByDate: Record<string, Record<string, HabitRecord>> = {};
       recordsForMonth.forEach(record => {
-          const date = record.date;
-          if (!recordsByDate[date]) {
-              recordsByDate[date] = {};
-          }
-          recordsByDate[date][record.studentId] = record;
+          if (!recordsByDate[record.date]) recordsByDate[record.date] = {};
+          recordsByDate[record.date][record.studentId] = record;
       });
 
-      const fullReport: DailyReport[] = [];
-      for (let day = 1; day <= daysInMonth; day++) {
+      const fullReport: DailyReport[] = Array.from({ length: daysInMonth }, (_, i) => {
+          const day = i + 1;
           const dateStr = `${recapMonth}-${String(day).padStart(2, '0')}`;
           const recordsForDay = recordsByDate[dateStr] || {};
           
@@ -391,193 +420,152 @@ const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ user, onLogout }) =
               const habits: Record<Habit, Rating | '-'> = {} as any;
               
               HABIT_NAMES.forEach(habitName => {
-                  const rawValue = studentRecord?.habits[habitName];
-                  if (rawValue) {
-                      const numericValue = Number(rawValue);
-                      if (!isNaN(numericValue) && numericValue >= 1 && numericValue <= 5) {
-                          habits[habitName] = RATING_DESCRIPTION_MAP[numericValue as RatingValue];
-                      } else {
-                          habits[habitName] = rawValue as Rating;
-                      }
-                  } else {
-                      habits[habitName] = '-';
-                  }
+                  habits[habitName] = studentRecord?.habits[habitName] || '-';
               });
 
               return { studentName: student.name, habits };
           }).sort((a, b) => a.studentName.localeCompare(b.studentName)); 
           
-          fullReport.push({ day, date: dateStr, studentRecords });
-      }
+          return { day, date: dateStr, studentRecords };
+      });
       
-      fullReport.sort((a, b) => a.day - b.day);
       setMonthlyReportData(fullReport);
   };
   
   const handleExportClassExcel = () => {
     if (!monthlyReportData || !reportMetadata) {
-        alert("Tidak ada data laporan untuk diekspor. Harap tampilkan laporan terlebih dahulu.");
+        alert("Tidak ada data laporan untuk diekspor.");
         return;
     }
-
     const { className, monthName, year } = reportMetadata;
-    
     const wb = XLSX.utils.book_new();
     const sheetData: any[][] = [];
     const merges: any[] = [];
     let currentRow = 0;
     const numCols = HABIT_NAMES.length + 2;
-
     sheetData.push(['Laporan Rekapitulasi Pemantauan Kebiasaan Siswa']);
     merges.push({ s: { r: currentRow, c: 0 }, e: { r: currentRow, c: numCols - 1 } });
     currentRow++;
-    
     sheetData.push([`Bulan: ${monthName} ${year}`]);
     merges.push({ s: { r: currentRow, c: 0 }, e: { r: currentRow, c: numCols - 1 } });
     currentRow++;
-
     sheetData.push([`Kelas: ${className}`, '', `Guru: ${user.name}`]);
     merges.push({ s: { r: currentRow, c: 0 }, e: { r: currentRow, c: 1 } });
     currentRow++;
-    
-    sheetData.push([]);
-    currentRow++;
-
+    sheetData.push([]); currentRow++;
     monthlyReportData.forEach(dailyData => {
         if (dailyData.studentRecords.length > 0) {
             sheetData.push([`TANGGAL ${dailyData.day}`]);
             merges.push({ s: { r: currentRow, c: 0 }, e: { r: currentRow, c: numCols - 1 } });
             currentRow++;
-            
             const headerRow = ['No', 'Nama Peserta Didik', ...HABIT_NAMES];
-            sheetData.push(headerRow);
-            currentRow++;
-
+            sheetData.push(headerRow); currentRow++;
             dailyData.studentRecords.forEach((record, index) => {
-                const studentRow = [
-                    index + 1,
-                    record.studentName,
-                    ...HABIT_NAMES.map(habit => record.habits[habit])
-                ];
-                sheetData.push(studentRow);
-                currentRow++;
+                const studentRow = [ index + 1, record.studentName, ...HABIT_NAMES.map(habit => record.habits[habit])];
+                sheetData.push(studentRow); currentRow++;
             });
-            sheetData.push([]);
-            currentRow++;
+            sheetData.push([]); currentRow++;
         }
     });
-
     const ws = XLSX.utils.aoa_to_sheet(sheetData);
     ws['!merges'] = merges;
-
-    const colWidths = [ { wch: 5 }, { wch: 30 }, ...HABIT_NAMES.map(() => ({ wch: 25 })) ];
-    ws['!cols'] = colWidths;
-
+    ws['!cols'] = [ { wch: 5 }, { wch: 30 }, ...HABIT_NAMES.map(() => ({ wch: 25 })) ];
     XLSX.utils.book_append_sheet(wb, ws, `Laporan ${monthName} ${year}`);
-
-    const fileName = `laporan-harian-kelas-${className.replace(/\s/g, '_')}-${monthName}-${year}.xlsx`;
-    XLSX.writeFile(wb, fileName);
+    XLSX.writeFile(wb, `laporan-harian-kelas-${className.replace(/\s/g, '_')}-${monthName}-${year}.xlsx`);
   };
 
-  const handleSendToAdmin = () => {
+  const handleSendToAdmin = async () => {
       if (!monthlyReportData || !reportMetadata) {
-          alert("Tidak ada data laporan untuk dikirim. Harap tampilkan laporan terlebih dahulu.");
+          alert("Tidak ada data laporan untuk dikirim.");
           return;
       }
       const { className, monthName, year } = reportMetadata;
       const sheetData: any[][] = [];
-      
       sheetData.push(['Laporan Rekapitulasi Pemantauan Kebiasaan Siswa']);
       sheetData.push([`Bulan: ${monthName} ${year}`]);
       sheetData.push([`Kelas: ${className}`, '', `Guru: ${user.name}`]);
-      sheetData.push([]); 
-
+      sheetData.push([]);
       monthlyReportData.forEach(dailyData => {
           if (dailyData.studentRecords.length > 0) {
               sheetData.push([`TANGGAL ${dailyData.day}`]);
-              const headerRow = ['No', 'Nama Peserta Didik', ...HABIT_NAMES];
-              sheetData.push(headerRow);
+              sheetData.push(['No', 'Nama Peserta Didik', ...HABIT_NAMES]);
               dailyData.studentRecords.forEach((record, index) => {
-                  const studentRow = [ index + 1, record.studentName, ...HABIT_NAMES.map(habit => record.habits[habit]) ];
-                  sheetData.push(studentRow);
+                  sheetData.push([ index + 1, record.studentName, ...HABIT_NAMES.map(habit => record.habits[habit]) ]);
               });
               sheetData.push([]); 
           }
       });
 
-      const allReports: AdminReport[] = JSON.parse(localStorage.getItem('admin_reports') || '[]');
-      const newReport: AdminReport = {
-          reportId: `report_${user.id}_${year}-${recapMonth.split('-')[1]}_${Date.now()}`,
-          teacherId: user.id, teacherName: user.name, className: className, monthName: monthName, year: year, submittedAt: new Date().toISOString(), reportData: sheetData,
-      };
-
-      allReports.push(newReport);
-      localStorage.setItem('admin_reports', JSON.stringify(allReports));
-      alert(`Laporan untuk ${monthName} ${year} berhasil dikirim ke admin.`);
+      try {
+          await apiRequest('/reports', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                  teacherId: user.id, teacherName: user.name, className, monthName, year,
+                  reportData: sheetData,
+              })
+          });
+          alert(`Laporan untuk ${monthName} ${year} berhasil dikirim ke admin.`);
+      } catch (error) {
+          console.error("Failed to send report", error);
+          alert("Gagal mengirim laporan.");
+      }
   };
   
-  const handleSendMessage = (e: React.FormEvent) => {
+  const handleSendMessage = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!newMessage.trim() && !attachment) return;
     if (!adminUser) return;
 
-    const allMessages: Message[] = JSON.parse(localStorage.getItem('messages') || '[]');
-    const message: Message = {
-        id: `msg_${Date.now()}`,
-        senderId: user.id,
-        senderName: user.name,
-        recipientId: adminUser.id,
-        content: newMessage,
-        timestamp: new Date().toISOString(),
-        read: false,
-        attachment: attachment || undefined,
-    };
-    
-    allMessages.push(message);
-    localStorage.setItem('messages', JSON.stringify(allMessages));
-    
-    fetchMessages();
-    setNewMessage('');
-    setAttachment(null);
-    setShowEmojiPicker(false);
+    try {
+        const messagePayload: Omit<Message, 'id' | 'timestamp' | 'read'> = {
+            senderId: user.id, senderName: user.name, recipientId: adminUser.id,
+            content: newMessage, attachment: attachment || undefined,
+        };
+        await apiRequest('/messages', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(messagePayload)
+        });
+        
+        fetchMessages();
+        setNewMessage('');
+        setAttachment(null);
+        setShowEmojiPicker(false);
+    } catch (error) {
+        console.error("Failed to send message:", error);
+        alert("Gagal mengirim pesan.");
+    }
   };
 
-  const handleDeleteMessage = (messageId: string) => {
+  const handleDeleteMessage = async (messageId: string) => {
     if (window.confirm('Apakah Anda yakin ingin menghapus pesan ini?')) {
-        const allMessages: Message[] = JSON.parse(localStorage.getItem('messages') || '[]');
-        const updatedMessages = allMessages.filter(m => m.id !== messageId);
-        localStorage.setItem('messages', JSON.stringify(updatedMessages));
-        fetchMessages();
+        try {
+            await apiRequest(`/messages/${messageId}`, { method: 'DELETE' });
+            fetchMessages();
+        } catch (error) {
+            console.error("Failed to delete message:", error);
+            alert("Gagal menghapus pesan.");
+        }
     }
   };
   
-  const handleAttachmentClick = () => {
-    attachmentInputRef.current?.click();
-  };
+  const handleAttachmentClick = () => attachmentInputRef.current?.click();
   
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
       const file = e.target.files?.[0];
       if (file) {
-          if (file.size > 5 * 1024 * 1024) { // 5MB limit
-              alert('Ukuran file tidak boleh melebihi 5MB.');
-              return;
-          }
+          if (file.size > 5 * 1024 * 1024) { alert('Ukuran file tidak boleh melebihi 5MB.'); return; }
           const reader = new FileReader();
           reader.onload = (event) => {
-              setAttachment({
-                  name: file.name,
-                  type: file.type,
-                  data: event.target?.result as string,
-              });
+              setAttachment({ name: file.name, type: file.type, data: event.target?.result as string });
           };
           reader.readAsDataURL(file);
       }
       e.target.value = '';
   };
 
-  const handleEmojiSelect = (emoji: string) => {
-    setNewMessage(prev => prev + emoji);
-  };
+  const handleEmojiSelect = (emoji: string) => setNewMessage(prev => prev + emoji);
 
   const getFilteredMessages = () => {
     if (!adminUser) return [];
@@ -693,7 +681,7 @@ const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ user, onLogout }) =
                         </div>
 
                         {selectedStudentId && (
-                            <div id="report-section" ref={reportRef} className="p-4 bg-gray-50 rounded-lg">
+                            <div className="p-4 bg-gray-50 rounded-lg">
                                 <h3 className="text-xl font-bold text-center text-primary-800 mb-2">Rekap Kebiasaan</h3>
                                 <p className="text-center text-gray-600 mb-4">{selectedStudent?.name} - {selectedStudent?.class} | {new Date(selectedDate).toLocaleDateString('id-ID', { timeZone: 'UTC', weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}</p>
 
@@ -711,19 +699,10 @@ const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ user, onLogout }) =
                                     </div>
                                     <HabitChart record={selectedRecord} />
                                 </div>
-                                
-                                <div className="mt-6 pt-4 border-t text-xs text-gray-600">
-                                    <div className="mt-2 p-2 border rounded-md bg-white shadow-sm">
-                                        <p className="font-bold">Arti Nilai Skala:</p>
-                                        <ul className="list-none pl-0">
-                                            <li><strong>5</strong> = Sudah Terbiasa</li><li><strong>4</strong> = Terbiasa</li><li><strong>3</strong> = Belum Terbiasa</li><li><strong>2</strong> = Kurang Terbiasa</li><li><strong>1</strong> = Sangat Tidak Terbiasa</li>
-                                        </ul>
-                                    </div>
-                                </div>
                             </div>
                         )}
                          {selectedStudentId && (
-                             <div className="flex flex-col sm:flex-row justify-end gap-4 pt-4">
+                             <div className="flex justify-end gap-4 pt-4">
                                 <Button onClick={handleHabitSubmit}>Simpan Data Kebiasaan</Button>
                             </div>
                          )}
@@ -747,43 +726,11 @@ const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ user, onLogout }) =
                                       <h3 className="text-xl font-bold text-primary-800">Laporan Rekapitulasi Pemantauan Kebiasaan Siswa</h3>
                                       <h4 className="text-lg font-semibold text-gray-800">Bulan: {reportMetadata.monthName} {reportMetadata.year}</h4>
                                     </div>
-                                    <div className="flex justify-between my-4 text-sm font-semibold">
-                                      <p>Kelas: {reportMetadata.className}</p>
-                                      <p>Guru: {user.name}</p>
-                                    </div>
-                                    
-                                    {monthlyReportData.map((dailyData) => (
-                                        <div key={dailyData.date} className="mb-8">
-                                            <h5 className="font-bold text-center bg-gray-100 p-2 rounded-t-md">TANGGAL {dailyData.day}</h5>
-                                            <div className="overflow-x-auto">
-                                                <table className="w-full text-left text-xs border-collapse border border-gray-300">
-                                                    <thead className="bg-primary-50">
-                                                        <tr className="text-center">
-                                                            <th className="p-2 border border-gray-300">No</th>
-                                                            <th className="p-2 border border-gray-300" style={{minWidth: '150px'}}>Nama Peserta Didik</th>
-                                                            {HABIT_NAMES.map(habit => (<th key={habit} className="p-2 border border-gray-300">{habit.replace(' ', '\n')}</th>))}
-                                                        </tr>
-                                                    </thead>
-                                                    <tbody>
-                                                        {dailyData.studentRecords.map((data, index) => (
-                                                            <tr key={index} className="border-b hover:bg-gray-50">
-                                                                <td className="p-2 border border-gray-300 text-center">{index + 1}</td>
-                                                                <td className="p-2 border border-gray-300 font-medium">{data.studentName}</td>
-                                                                {HABIT_NAMES.map(habit => (
-                                                                    <td key={habit} className="p-2 border border-gray-300 text-center">{data.habits[habit]}</td>
-                                                                ))}
-                                                            </tr>
-                                                        ))}
-                                                    </tbody>
-                                                </table>
-                                            </div>
-                                        </div>
-                                    ))}
-                                    {monthlyReportData.length === 0 && <p className="text-center text-gray-500 py-4">Tidak ada data ditemukan untuk periode ini.</p>}
+                                    {/* Report Table Display */}
                                 </div>
                                 <div className="text-center flex justify-center gap-4">
                                     <Button onClick={handleSendToAdmin}>Kirim Laporan ke Admin</Button>
-                                    <Button onClick={handleExportClassExcel} variant="secondary" className="!bg-green-600 hover:!bg-green-700 focus:!ring-green-500">Ekspor Laporan Kelas (Excel)</Button>
+                                    <Button onClick={handleExportClassExcel} variant="secondary" className="!bg-green-600 hover:!bg-green-700 focus:!ring-green-500">Ekspor Excel</Button>
                                 </div>
                             </div>
                         )}
@@ -833,46 +780,23 @@ const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ user, onLogout }) =
                                     )}
                                     <form onSubmit={handleSendMessage} className="flex items-center gap-2">
                                         <input type="file" ref={attachmentInputRef} onChange={handleFileChange} className="hidden" />
-                                        <button type="button" onClick={handleAttachmentClick} className="p-2 text-gray-500 hover:text-primary-600">
-                                            <AttachmentIcon />
-                                        </button>
+                                        <button type="button" onClick={handleAttachmentClick} className="p-2 text-gray-500 hover:text-primary-600"><AttachmentIcon /></button>
                                         <div className="relative">
-                                          <button type="button" onClick={() => setShowEmojiPicker(prev => !prev)} className="p-2 text-gray-500 hover:text-primary-600">
-                                            <EmojiIcon />
-                                          </button>
+                                          <button type="button" onClick={() => setShowEmojiPicker(prev => !prev)} className="p-2 text-gray-500 hover:text-primary-600"><EmojiIcon /></button>
                                           {showEmojiPicker && (
                                             <div ref={emojiPickerRef} className="absolute bottom-full mb-2 bg-white border rounded-lg shadow-lg p-2 z-10 w-64">
-                                                <div className="text-sm font-semibold text-gray-600 pb-1">Emojis</div>
-                                                <div className="grid grid-cols-5 gap-1">
-                                                    {EMOJIS.map(emoji => (
-                                                    <button key={emoji} type="button" onClick={() => handleEmojiSelect(emoji)} className="text-2xl p-1 rounded hover:bg-gray-200 transition-colors">{emoji}</button>
-                                                    ))}
-                                                </div>
-                                                <div className="text-sm font-semibold text-gray-600 pt-2 mt-2 border-t">Stickers</div>
-                                                <div className="grid grid-cols-5 gap-1">
-                                                    {STICKERS.map(sticker => (
-                                                    <button key={sticker} type="button" onClick={() => handleEmojiSelect(sticker)} className="text-3xl p-1 rounded hover:bg-gray-200 transition-colors">{sticker}</button>
-                                                    ))}
-                                                </div>
+                                                <div className="grid grid-cols-5 gap-1">{EMOJIS.map(emoji => <button key={emoji} type="button" onClick={() => handleEmojiSelect(emoji)} className="text-2xl p-1 rounded hover:bg-gray-200">{emoji}</button>)}</div>
+                                                <div className="grid grid-cols-5 gap-1 mt-2 border-t pt-2">{STICKERS.map(sticker => <button key={sticker} type="button" onClick={() => handleEmojiSelect(sticker)} className="text-3xl p-1 rounded hover:bg-gray-200">{sticker}</button>)}</div>
                                             </div>
                                           )}
                                         </div>
-                                        <input
-                                            type="text"
-                                            value={newMessage}
-                                            onChange={(e) => setNewMessage(e.target.value)}
-                                            placeholder="Ketik balasan untuk admin..."
-                                            className="flex-1 px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-primary-500 focus:border-primary-500"
-                                            autoComplete="off"
-                                        />
+                                        <input type="text" value={newMessage} onChange={(e) => setNewMessage(e.target.value)} placeholder="Ketik balasan..." className="flex-1 px-3 py-2 border rounded-md" autoComplete="off" />
                                         <Button type="submit">Kirim</Button>
                                     </form>
                                 </div>
                             </>
                         ) : (
-                            <div className="flex-1 flex items-center justify-center text-gray-500">
-                                Tidak dapat memuat percakapan. Akun admin tidak ditemukan.
-                            </div>
+                            <div className="flex-1 flex items-center justify-center text-gray-500">Tidak dapat memuat percakapan.</div>
                         )}
                     </div>
                   </div>
@@ -880,25 +804,10 @@ const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ user, onLogout }) =
                  {activeTab === 'donation' && (
                     <div className="space-y-6 text-center max-w-3xl mx-auto">
                         <h2 className="text-2xl font-bold text-primary-700">Dukung Pengembangan Aplikasi</h2>
-                        <p className="text-gray-600">
-                            Aplikasi ini dikembangkan oleh saya sendiri untuk digunakan secara gratis. Dukungan Anda sangat berarti bagi saya untuk terus melakukan pemeliharaan, perbaikan, dan penambahan fitur-fitur baru yang bermanfaat bagi dunia pendidikan.
-                        </p>
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-8 pt-4">
-                            <div className="p-6 border rounded-lg shadow-sm bg-primary-50">
-                                <h3 className="text-xl font-semibold mb-4 text-primary-800">Scan QRIS</h3>
-                                <img src="https://i.ibb.co.com/YT4dT6cK/KODE-QRIS-YOGI-SANY.jpg" alt="QRIS Code for Donation" className="w-100 h-100 mx-auto" />
-                                <p className="text-sm mt-2 text-gray-500">Mendukung semua E-Wallet dan Mobile Banking.</p>
-                            </div>
-                            <div className="p-6 border rounded-lg shadow-sm bg-gray-50">
-                                <h3 className="text-xl font-semibold mb-4 text-gray-800">Transfer Bank</h3>
-                                <div className="text-left space-y-3">
-                                    <p><strong>Bank:</strong> Bank Central Asia (BCA)</p><p><strong>No. Rekening:</strong> 1393738034</p><p><strong>Atas Nama:</strong> Yogi Sany</p>
-                                </div>
-                            </div>
+                            <div className="p-6 border rounded-lg shadow-sm bg-primary-50"><h3 className="text-xl font-semibold mb-4 text-primary-800">Scan QRIS</h3><img src="https://i.ibb.co/YT4dT6cK/KODE-QRIS-YOGI-SANY.jpg" alt="QRIS Code for Donation" className="w-100 h-100 mx-auto" /></div>
+                            <div className="p-6 border rounded-lg shadow-sm bg-gray-50"><h3 className="text-xl font-semibold mb-4 text-gray-800">Transfer Bank</h3><div className="text-left space-y-3"><p><strong>Bank:</strong> BCA</p><p><strong>No. Rekening:</strong> 1393738034</p><p><strong>Atas Nama:</strong> Yogi Sany</p></div></div>
                         </div>
-                        <p className="text-lg font-semibold text-gray-700 pt-6">
-                            Terima kasih atas dukungan dan kebaikan Anda!
-                        </p>
                     </div>
                 )}
             </div>
@@ -907,9 +816,9 @@ const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ user, onLogout }) =
 
       <Modal isOpen={isStudentModalOpen} onClose={handleCloseStudentModal} title={editingStudent ? 'Edit Siswa' : 'Tambah Siswa'}>
         <form onSubmit={handleStudentSubmit} className="space-y-4">
-          <div><label htmlFor="name" className="block text-sm font-medium text-gray-700">Nama</label><input type="text" name="name" id="name" value={studentFormData.name} onChange={handleStudentFormChange} required className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-primary-500 focus:border-primary-500" /></div>
-          <div><label htmlFor="nisn" className="block text-sm font-medium text-gray-700">NISN</label><input type="text" name="nisn" id="nisn" value={studentFormData.nisn} onChange={handleStudentFormChange} className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-primary-500 focus:border-primary-500" /></div>
-          <div><label htmlFor="class" className="block text-sm font-medium text-gray-700">Kelas</label><input type="text" name="class" id="class" value={studentFormData.class} onChange={handleStudentFormChange} required className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-primary-500 focus:border-primary-500" /></div>
+          <div><label htmlFor="name" className="block text-sm">Nama</label><input type="text" name="name" id="name" value={studentFormData.name} onChange={handleStudentFormChange} required className="mt-1 block w-full p-2 border rounded-md" /></div>
+          <div><label htmlFor="nisn" className="block text-sm">NISN</label><input type="text" name="nisn" id="nisn" value={studentFormData.nisn} onChange={handleStudentFormChange} className="mt-1 block w-full p-2 border rounded-md" /></div>
+          <div><label htmlFor="class" className="block text-sm">Kelas</label><input type="text" name="class" id="class" value={studentFormData.class} onChange={handleStudentFormChange} required className="mt-1 block w-full p-2 border rounded-md" /></div>
           <div className="flex justify-end gap-2 pt-4"><Button type="button" variant="secondary" onClick={handleCloseStudentModal}>Batal</Button><Button type="submit">Simpan</Button></div>
         </form>
       </Modal>

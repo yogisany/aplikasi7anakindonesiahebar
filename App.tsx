@@ -10,32 +10,15 @@ const App: React.FC = () => {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    // Initialize mock data if it doesn't exist
-    if (!localStorage.getItem('users')) {
-      const initialUsers: User[] = [
-        { id: 'admin01', username: 'admin', password: 'password', role: 'admin', name: 'Admin Utama' },
-        { id: 'teacher01', username: 'guru1', password: 'password', role: 'teacher', name: 'Budi S.', nip: '198001012010011001', kelas: '4A' },
-        { id: 'teacher02', username: 'guru2', password: 'password', role: 'teacher', name: 'Ani W.', nip: '198502022012022002', kelas: '4B' },
-      ];
-      localStorage.setItem('users', JSON.stringify(initialUsers));
-    }
-    if (!localStorage.getItem('students')) {
-        localStorage.setItem('students', JSON.stringify([]));
-    }
-    if (!localStorage.getItem('habit_records')) {
-        localStorage.setItem('habit_records', JSON.stringify([]));
-    }
-    if (!localStorage.getItem('admin_reports')) {
-        localStorage.setItem('admin_reports', JSON.stringify([]));
-    }
-    if (!localStorage.getItem('messages')) {
-        localStorage.setItem('messages', JSON.stringify([]));
-    }
-
     // Check for logged in user in local storage for persistence across tabs/browsers
-    const loggedInUser = localStorage.getItem('currentUser');
-    if (loggedInUser) {
-      setCurrentUser(JSON.parse(loggedInUser));
+    try {
+      const loggedInUser = localStorage.getItem('currentUser');
+      if (loggedInUser) {
+        setCurrentUser(JSON.parse(loggedInUser));
+      }
+    } catch (error) {
+      console.error("Failed to parse user from localStorage", error);
+      localStorage.removeItem('currentUser');
     }
     setLoading(false);
   }, []);

@@ -1,3 +1,4 @@
+
 import React, { useState } from 'react';
 import { User } from '../types';
 import Button from '../components/Button';
@@ -9,62 +10,45 @@ interface LoginPageProps {
 const LoginPage: React.FC<LoginPageProps> = ({ onLogin }) => {
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
-  const [accessCode, setAccessCode] = useState('');
   const [error, setError] = useState('');
+  const [loading, setLoading] = useState(false);
 
-  const handleSync = (code: string): boolean => {
-    try {
-      // FIX: Use decodeURIComponent to correctly handle special/unicode characters.
-      const jsonString = decodeURIComponent(escape(atob(code)));
-      const data = JSON.parse(jsonString);
-      
-      const requiredKeys = ['users', 'students', 'habit_records', 'admin_reports', 'messages'];
-      const dataKeys = Object.keys(data);
-
-      if (!requiredKeys.every(key => dataKeys.includes(key))) {
-        throw new Error('Format kode tidak valid atau data tidak lengkap.');
-      }
-
-      // We don't clear, just overwrite. This is safer.
-      requiredKeys.forEach(key => {
-        localStorage.setItem(key, JSON.stringify(data[key]));
-      });
-      
-      alert('Sinkronisasi berhasil! Perangkat ini sekarang memiliki data terbaru.');
-      return true;
-    } catch (err) {
-      console.error('Sync failed:', err);
-      setError('Gagal melakukan sinkronisasi. Pastikan Kode Akses yang Anda masukkan benar.');
-      return false;
-    }
-  };
-
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError('');
+    setLoading(true);
 
-    // Step 1: Handle synchronization if access code is provided
-    if (accessCode.trim()) {
-      const syncSuccess = handleSync(accessCode);
-      if (!syncSuccess) {
-        return; // Stop if sync fails
+    try {
+      // In a real application, you would replace this with a fetch request
+      // to your backend authentication endpoint.
+      // const response = await apiRequest('/auth/login', {
+      //   method: 'POST',
+      //   headers: { 'Content-Type': 'application/json' },
+      //   body: JSON.stringify({ username, password }),
+      // });
+      // const user = response.user;
+      
+      // --- START OF MOCK LOGIC FOR DEMONSTRATION ---
+      // This block simulates a successful login for specific users
+      // so you can navigate the app. It should be replaced by a real API call.
+      await new Promise(resolve => setTimeout(resolve, 500));
+      let user: User | null = null;
+      if (username === 'admin' && password === 'password') {
+        user = { id: 'admin01', name: 'Admin Utama', username: 'admin', password: 'password', role: 'admin' };
+      } else if (username === 'guru1' && password === 'password') {
+        user = { id: 'teacher01', name: 'Budi Hartono', username: 'guru1', password: 'password', role: 'teacher', nip: '12345', kelas: 'Kelas 1A' };
       }
-    }
+      // --- END OF MOCK LOGIC ---
 
-    // Step 2: Proceed with login attempt
-    const users: User[] = JSON.parse(localStorage.getItem('users') || '[]');
-    const user = users.find(u => u.username === username && u.password === password);
-
-    if (user) {
-      onLogin(user);
-    } else {
-      let errorMessage = 'Username atau password salah.';
-      if (accessCode.trim()) {
-        errorMessage += ' Silakan coba login lagi.';
+      if (user) {
+        onLogin(user);
       } else {
-        errorMessage += " Jika ini perangkat baru, Anda memerlukan 'Kode Akses' dari admin.";
+        throw new Error('Username atau password salah.');
       }
-      setError(errorMessage);
+    } catch (err: any) {
+      setError(err.message || 'Terjadi kesalahan saat mencoba login.');
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -104,6 +88,7 @@ const LoginPage: React.FC<LoginPageProps> = ({ onLogin }) => {
                   onChange={(e) => setUsername(e.target.value)}
                   required
                   aria-label="Username"
+                  disabled={loading}
                 />
               </div>
 
@@ -121,25 +106,14 @@ const LoginPage: React.FC<LoginPageProps> = ({ onLogin }) => {
                   onChange={(e) => setPassword(e.target.value)}
                   required
                   aria-label="Password"
+                  disabled={loading}
                 />
               </div>
-
-              <div>
-                <textarea
-                  className="w-full px-4 py-3 rounded-2xl border-2 border-primary-200 bg-primary-50 focus:bg-white focus:outline-none focus:ring-2 focus:ring-primary-400 focus:border-transparent transition-all text-sm"
-                  placeholder="Kode Akses (Opsional, isi HANYA untuk login di perangkat baru)"
-                  value={accessCode}
-                  onChange={(e) => setAccessCode(e.target.value)}
-                  aria-label="Kode Akses"
-                  rows={3}
-                />
-              </div>
-
 
               {error && <p className="text-sm text-red-600 text-center">{error}</p>}
 
-              <Button type="submit" className="w-full !py-3 !rounded-full text-lg tracking-wider font-bold shadow-lg !bg-orange-500 hover:!bg-orange-600 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-orange-500 transition-transform transform hover:scale-105">
-                MASUK
+              <Button type="submit" disabled={loading} className="w-full !py-3 !rounded-full text-lg tracking-wider font-bold shadow-lg !bg-orange-500 hover:!bg-orange-600 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-orange-500 transition-transform transform hover:scale-105">
+                {loading ? 'MEMPROSES...' : 'MASUK'}
               </Button>
             </form>
 
