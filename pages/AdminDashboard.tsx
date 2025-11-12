@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { User, Student, HabitRecord, AdminReport, Message, Attachment } from '../types';
 import Header from '../components/Header';
@@ -90,6 +89,13 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ user, onLogout }) => {
     fetchSubmittedReports();
     fetchMessages();
   }, [fetchTeachers, fetchAdmins, fetchSubmittedReports, fetchMessages]);
+
+  useEffect(() => {
+    // If a non-main admin is on the admin management tab, redirect them to the teachers tab.
+    if (user.id !== 'admin01' && activeTab === 'admins') {
+        setActiveTab('teachers');
+    }
+  }, [activeTab, user.id]);
 
    useEffect(() => {
     if (chatContainerRef.current) {
@@ -376,7 +382,9 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ user, onLogout }) => {
            <div className="border-b border-gray-200">
                 <nav className="-mb-px flex space-x-8" aria-label="Tabs">
                     <button onClick={() => setActiveTab('teachers')} className={tabClass('teachers')}>Manajemen Guru</button>
-                    <button onClick={() => setActiveTab('admins')} className={tabClass('admins')}>Manajemen Admin</button>
+                    {user.id === 'admin01' && (
+                        <button onClick={() => setActiveTab('admins')} className={tabClass('admins')}>Manajemen Admin</button>
+                    )}
                     <button onClick={() => setActiveTab('reports')} className={tabClass('reports')}>Laporan Guru</button>
                     <button onClick={() => setActiveTab('messages')} className={tabClass('messages')}>
                         Pesan
