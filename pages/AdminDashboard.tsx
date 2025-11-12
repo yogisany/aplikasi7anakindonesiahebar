@@ -261,6 +261,16 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ user, onLogout }) => {
         .replace(/\s/g, '_');
     XLSX.writeFile(wb, fileName);
   };
+  
+  const handleDeleteReport = (reportId: string) => {
+      if (window.confirm('Apakah Anda yakin ingin menghapus laporan ini? Tindakan ini tidak dapat dibatalkan.')) {
+        const allReports: AdminReport[] = JSON.parse(localStorage.getItem('admin_reports') || '[]');
+        const updatedReports = allReports.filter(report => report.reportId !== reportId);
+        localStorage.setItem('admin_reports', JSON.stringify(updatedReports));
+        fetchSubmittedReports();
+        alert('Laporan berhasil dihapus.');
+      }
+  };
 
 
   return (
@@ -349,9 +359,18 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ user, onLogout }) => {
                                 <td className="p-3">{report.monthName} {report.year}</td>
                                 <td className="p-3">{new Date(report.submittedAt).toLocaleString('id-ID')}</td>
                                 <td className="p-3">
-                                    <Button onClick={() => handleDownloadReport(report)} variant="secondary" className="!text-sm !py-1 !px-2">
-                                        Unduh Laporan
-                                    </Button>
+                                    <div className="flex gap-2 items-center">
+                                        <Button onClick={() => handleDownloadReport(report)} variant="secondary" className="!text-sm !py-1 !px-2">
+                                            Unduh Laporan
+                                        </Button>
+                                        <button 
+                                            onClick={() => handleDeleteReport(report.reportId)} 
+                                            className="text-red-600 hover:text-red-800"
+                                            title="Hapus laporan"
+                                        >
+                                            <TrashIcon />
+                                        </button>
+                                    </div>
                                 </td>
                             </tr>
                         )) : (
