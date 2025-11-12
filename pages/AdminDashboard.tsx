@@ -7,9 +7,13 @@ import Modal from '../components/Modal';
 import PlusIcon from '../components/icons/PlusIcon';
 import EditIcon from '../components/icons/EditIcon';
 import TrashIcon from '../components/icons/TrashIcon';
+import EmojiIcon from '../components/icons/EmojiIcon';
 
 // Declare XLSX from global scope
 declare const XLSX: any;
+
+const EMOJIS = ['😀', '😂', '😍', '👍', '🙏', '😊', '🤔', '🎉', '🚀', '❤️'];
+const STICKERS = ['👋', '💯', '🔥', '✨', '👌'];
 
 interface AdminDashboardProps {
   user: User;
@@ -34,7 +38,10 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ user, onLogout }) => {
   const [messages, setMessages] = useState<Message[]>([]);
   const [selectedRecipientId, setSelectedRecipientId] = useState<string | null>(null);
   const [newMessage, setNewMessage] = useState('');
+  const [unreadSenders, setUnreadSenders] = useState<Set<string>>(new Set());
+  const [showEmojiPicker, setShowEmojiPicker] = useState(false);
   const chatContainerRef = useRef<HTMLDivElement>(null);
+  const emojiPickerRef = useRef<HTMLDivElement>(null);
 
 
   const fetchTeachers = useCallback(() => {
@@ -51,7 +58,15 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ user, onLogout }) => {
   const fetchMessages = useCallback(() => {
     const allMessages: Message[] = JSON.parse(localStorage.getItem('messages') || '[]');
     setMessages(allMessages);
-  }, []);
+
+    const newUnreadSenders = new Set<string>();
+    allMessages.forEach(msg => {
+        if (msg.recipientId === user.id && !msg.read) {
+            newUnreadSenders.add(msg.senderId);
+        }
+    });
+    setUnreadSenders(newUnreadSenders);
+  }, [user.id]);
 
   useEffect(() => {
     fetchTeachers();
@@ -64,6 +79,42 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ user, onLogout }) => {
       chatContainerRef.current.scrollTop = chatContainerRef.current.scrollHeight;
     }
   }, [messages, selectedRecipientId]);
+  
+  // Mark messages as read when a conversation is opened
+  useEffect(() => {
+    if (!selectedRecipientId || selectedRecipientId === 'all_teachers') return;
+    
+    // Check if there are unread messages from this sender before proceeding
+    if (!unreadSenders.has(selectedRecipientId)) return;
+
+    const allMessages: Message[] = JSON.parse(localStorage.getItem('messages') || '[]');
+    let messagesUpdated = false;
+    const updatedMessages = allMessages.map(m => {
+        if (m.senderId === selectedRecipientId && m.recipientId === user.id && !m.read) {
+            messagesUpdated = true;
+            return { ...m, read: true };
+        }
+        return m;
+    });
+
+    if (messagesUpdated) {
+        localStorage.setItem('messages', JSON.stringify(updatedMessages));
+        fetchMessages(); // Refetch to update unread counts
+    }
+  }, [selectedRecipientId, user.id, fetchMessages, unreadSenders]);
+
+  // Effect to close emoji picker on outside click
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+        if (emojiPickerRef.current && !emojiPickerRef.current.contains(event.target as Node)) {
+            setShowEmojiPicker(false);
+        }
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => {
+        document.removeEventListener('mousedown', handleClickOutside);
+    };
+  }, []);
 
   const handleOpenModal = (teacher: User | null = null) => {
     if (teacher) {
@@ -287,6 +338,11 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ user, onLogout }) => {
     
     fetchMessages();
     setNewMessage('');
+    setShowEmojiPicker(false);
+  };
+  
+  const handleEmojiSelect = (emoji: string) => {
+    setNewMessage(prev => prev + emoji);
   };
 
   const getFilteredMessages = () => {
@@ -307,7 +363,7 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ user, onLogout }) => {
   const currentConversation = getFilteredMessages();
 
   const tabClass = (tabName: string) => 
-    `${activeTab === tabName ? 'border-primary-500 text-primary-600' : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'} whitespace-nowrap py-4 px-1 border-b-2 font-medium text-sm`;
+    `${activeTab === tabName ? 'border-primary-500 text-primary-600' : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'} whitespace-nowrap py-4 px-1 border-b-2 font-medium text-sm flex items-center`;
 
   return (
     <>
@@ -318,7 +374,10 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ user, onLogout }) => {
                 <nav className="-mb-px flex space-x-8" aria-label="Tabs">
                     <button onClick={() => setActiveTab('teachers')} className={tabClass('teachers')}>Manajemen Guru</button>
                     <button onClick={() => setActiveTab('reports')} className={tabClass('reports')}>Laporan Guru</button>
-                    <button onClick={() => setActiveTab('messages')} className={tabClass('messages')}>Pesan</button>
+                    <button onClick={() => setActiveTab('messages')} className={tabClass('messages')}>
+                        Pesan
+                        {unreadSenders.size > 0 && <span className="ml-2 w-2 h-2 bg-red-500 rounded-full"></span>}
+                    </button>
                     <button onClick={() => setActiveTab('settings')} className={tabClass('settings')}>Pengaturan Akun</button>
                 </nav>
             </div>
@@ -401,7 +460,10 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ user, onLogout }) => {
                                 </li>
                                 {teachers.map(teacher => (
                                     <li key={teacher.id} onClick={() => setSelectedRecipientId(teacher.id)} className={`p-3 cursor-pointer hover:bg-primary-100 ${selectedRecipientId === teacher.id ? 'bg-primary-200' : ''}`}>
-                                        <div className="font-semibold">{teacher.name}</div>
+                                        <div className="font-semibold flex items-center justify-between">
+                                            <span>{teacher.name}</span>
+                                            {unreadSenders.has(teacher.id) && <span className="w-2 h-2 bg-red-500 rounded-full"></span>}
+                                        </div>
                                         <div className="text-sm text-gray-500">Kelas {teacher.kelas}</div>
                                     </li>
                                 ))}
@@ -418,13 +480,34 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ user, onLogout }) => {
                                       {currentConversation.map(msg => (
                                           <div key={msg.id} className={`flex ${msg.senderId === user.id ? 'justify-end' : 'justify-start'}`}>
                                               <div className={`max-w-xs lg:max-w-md p-3 rounded-lg ${msg.senderId === user.id ? 'bg-primary-500 text-white' : 'bg-gray-200'}`}>
-                                                  <p className="text-sm">{msg.content}</p>
+                                                  <p className="text-sm break-words">{msg.content}</p>
                                                   <p className={`text-xs mt-1 ${msg.senderId === user.id ? 'text-blue-100' : 'text-gray-500'}`}>{new Date(msg.timestamp).toLocaleTimeString('id-ID', { hour: '2-digit', minute:'2-digit' })}</p>
                                               </div>
                                           </div>
                                       ))}
                                     </div>
-                                    <form onSubmit={handleSendMessage} className="p-3 border-t bg-white flex gap-2">
+                                    <form onSubmit={handleSendMessage} className="p-3 border-t bg-white flex items-center gap-2">
+                                        <div className="relative">
+                                          <button type="button" onClick={() => setShowEmojiPicker(prev => !prev)} className="p-2 text-gray-500 hover:text-primary-600">
+                                            <EmojiIcon />
+                                          </button>
+                                          {showEmojiPicker && (
+                                            <div ref={emojiPickerRef} className="absolute bottom-full mb-2 bg-white border rounded-lg shadow-lg p-2 z-10 w-64">
+                                                <div className="text-sm font-semibold text-gray-600 pb-1">Emojis</div>
+                                                <div className="grid grid-cols-5 gap-1">
+                                                  {EMOJIS.map(emoji => (
+                                                    <button key={emoji} type="button" onClick={() => handleEmojiSelect(emoji)} className="text-2xl p-1 rounded hover:bg-gray-200 transition-colors">{emoji}</button>
+                                                  ))}
+                                                </div>
+                                                <div className="text-sm font-semibold text-gray-600 pt-2 mt-2 border-t">Stickers</div>
+                                                <div className="grid grid-cols-5 gap-1">
+                                                  {STICKERS.map(sticker => (
+                                                    <button key={sticker} type="button" onClick={() => handleEmojiSelect(sticker)} className="text-3xl p-1 rounded hover:bg-gray-200 transition-colors">{sticker}</button>
+                                                  ))}
+                                                </div>
+                                            </div>
+                                          )}
+                                        </div>
                                         <input
                                             type="text"
                                             value={newMessage}
