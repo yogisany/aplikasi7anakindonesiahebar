@@ -567,7 +567,7 @@ const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ user, onLogout }) =
                     <div className="space-y-6 text-center max-w-3xl mx-auto">
                         <h2 className="text-2xl font-bold text-primary-700">Dukung Pengembangan Aplikasi</h2>
                         <p className="text-gray-600">
-                            Aplikasi ini dikembangkan secara independen dan gratis untuk digunakan. Dukungan Anda sangat berarti bagi kami untuk terus melakukan pemeliharaan, perbaikan, dan penambahan fitur-fitur baru yang bermanfaat bagi dunia pendidikan.
+                            Aplikasi ini dikembangkan oleh saya sendiri untuk digunakan secara gratis. Dukungan Anda sangat berarti bagi saya untuk terus melakukan pemeliharaan, perbaikan, dan penambahan fitur-fitur baru yang bermanfaat bagi dunia pendidikan.
                         </p>
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-8 pt-4">
                             <div className="p-6 border rounded-lg shadow-sm bg-primary-50">
@@ -575,7 +575,7 @@ const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ user, onLogout }) =
                                 <img 
                                     src="https://i.ibb.co.com/YT4dT6cK/KODE-QRIS-YOGI-SANY.jpg"
                                     alt="QRIS Code for Donation" 
-                                    className="w-48 h-48 mx-auto" 
+                                    className="w-100 h-100 mx-auto" 
                                 />
                                 <p className="text-sm mt-2 text-gray-500">Mendukung semua E-Wallet dan Mobile Banking.</p>
                             </div>
