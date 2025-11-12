@@ -9,6 +9,8 @@ import TrashIcon from '../components/icons/TrashIcon';
 import EmojiIcon from '../components/icons/EmojiIcon';
 import AttachmentIcon from '../components/icons/AttachmentIcon';
 import DownloadIcon from '../components/icons/DownloadIcon';
+import SyncIcon from '../components/icons/SyncIcon';
+import ClipboardIcon from '../components/icons/ClipboardIcon';
 
 // Declare XLSX from global scope
 declare const XLSX: any;
@@ -53,6 +55,9 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ user, onLogout }) => {
   const chatContainerRef = useRef<HTMLDivElement>(null);
   const emojiPickerRef = useRef<HTMLDivElement>(null);
   const attachmentInputRef = useRef<HTMLInputElement>(null);
+
+  // State for Sync
+  const [syncCode, setSyncCode] = useState('');
 
   const fetchTeachers = useCallback(() => {
     const allUsers: User[] = JSON.parse(localStorage.getItem('users') || '[]');
@@ -362,6 +367,29 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ user, onLogout }) => {
   };
   const handleEmojiSelect = (emoji: string) => setNewMessage(prev => prev + emoji);
 
+  const generateSyncCode = () => {
+    const dataToSync = {
+        users: JSON.parse(localStorage.getItem('users') || '[]'),
+        students: JSON.parse(localStorage.getItem('students') || '[]'),
+        habit_records: JSON.parse(localStorage.getItem('habit_records') || '[]'),
+        admin_reports: JSON.parse(localStorage.getItem('admin_reports') || '[]'),
+        messages: JSON.parse(localStorage.getItem('messages') || '[]'),
+    };
+    const jsonString = JSON.stringify(dataToSync);
+    const base64String = btoa(jsonString);
+    setSyncCode(base64String);
+  };
+
+  const handleCopyToClipboard = () => {
+      if (!syncCode) return;
+      navigator.clipboard.writeText(syncCode).then(() => {
+          alert('Kode berhasil disalin ke clipboard!');
+      }, (err) => {
+          alert('Gagal menyalin kode.');
+          console.error('Could not copy text: ', err);
+      });
+  };
+
   const getFilteredMessages = () => {
     if (!selectedRecipientId) return [];
     if (selectedRecipientId === 'all_teachers') return messages.filter(m => m.recipientId === 'all_teachers');
@@ -380,7 +408,7 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ user, onLogout }) => {
       <main className="container mx-auto p-4 md:p-6">
         <div className="bg-white p-6 rounded-lg shadow-md">
            <div className="border-b border-gray-200">
-                <nav className="-mb-px flex space-x-8" aria-label="Tabs">
+                <nav className="-mb-px flex space-x-8 overflow-x-auto" aria-label="Tabs">
                     <button onClick={() => setActiveTab('teachers')} className={tabClass('teachers')}>Manajemen Guru</button>
                     {user.id === 'admin01' && (
                         <button onClick={() => setActiveTab('admins')} className={tabClass('admins')}>Manajemen Admin</button>
@@ -390,6 +418,7 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ user, onLogout }) => {
                         Pesan
                         {unreadSenders.size > 0 && <span className="ml-2 w-2 h-2 bg-red-500 rounded-full"></span>}
                     </button>
+                    <button onClick={() => setActiveTab('sync')} className={tabClass('sync')}>Sinkronisasi Data</button>
                     <button onClick={() => setActiveTab('settings')} className={tabClass('settings')}>Pengaturan Akun</button>
                 </nav>
             </div>
@@ -584,6 +613,44 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ user, onLogout }) => {
                         </div>
                      </div>
                   </div>
+                )}
+                 {activeTab === 'sync' && (
+                    <div>
+                        <h2 className="text-xl font-semibold text-primary-700 mb-4">Sinkronisasi Data Antar Perangkat</h2>
+                        <div className="p-4 border rounded-lg bg-yellow-50 border-yellow-200 text-yellow-800">
+                            <p className="font-bold">Penting:</p>
+                            <p className="text-sm">Fitur ini digunakan untuk menyalin semua data dari perangkat ini ke perangkat lain (misalnya, laptop guru). Guru tidak akan bisa login di laptopnya jika data belum disinkronkan.</p>
+                        </div>
+                        <div className="mt-6">
+                            <Button onClick={generateSyncCode}>
+                                <SyncIcon className="w-5 h-5"/>
+                                <span>Buat Kode Sinkronisasi Baru</span>
+                            </Button>
+
+                            {syncCode && (
+                                <div className="mt-4 space-y-2">
+                                    <p className="text-sm text-gray-600">Salin kode di bawah ini dan bagikan kepada semua guru. Minta mereka untuk memasukkan kode ini di halaman login.</p>
+                                    <div className="relative">
+                                        <textarea
+                                            readOnly
+                                            value={syncCode}
+                                            className="w-full h-40 p-2 border rounded-md bg-gray-100 font-mono text-xs"
+                                            aria-label="Synchronization Code"
+                                        />
+                                        <Button 
+                                            onClick={handleCopyToClipboard}
+                                            className="absolute top-2 right-2 !py-1 !px-2"
+                                            variant="secondary"
+                                            aria-label="Copy Code"
+                                        >
+                                            <ClipboardIcon className="w-4 h-4 mr-1"/>
+                                            Salin
+                                        </Button>
+                                    </div>
+                                </div>
+                            )}
+                        </div>
+                    </div>
                 )}
                 {activeTab === 'settings' && (
                   <div>
