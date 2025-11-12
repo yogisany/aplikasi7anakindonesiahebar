@@ -24,13 +24,21 @@ interface AdminDashboardProps {
 
 const AdminDashboard: React.FC<AdminDashboardProps> = ({ user, onLogout }) => {
   const [activeTab, setActiveTab] = useState('teachers');
+  
+  // Teacher Management State
   const [teachers, setTeachers] = useState<User[]>([]);
-  const [isModalOpen, setIsModalOpen] = useState(false);
+  const [isTeacherModalOpen, setIsTeacherModalOpen] = useState(false);
   const [editingTeacher, setEditingTeacher] = useState<User | null>(null);
-  const [formData, setFormData] = useState({ id: '', name: '', username: '', password: '', nip: '', kelas: '' });
+  const [teacherFormData, setTeacherFormData] = useState({ id: '', name: '', username: '', password: '', nip: '', kelas: '' });
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  // State for admin account settings
+  // Admin Management State
+  const [admins, setAdmins] = useState<User[]>([]);
+  const [isAdminModalOpen, setIsAdminModalOpen] = useState(false);
+  const [editingAdmin, setEditingAdmin] = useState<User | null>(null);
+  const [adminFormData, setAdminFormData] = useState({ id: '', name: '', username: '', password: '' });
+
+  // State for account settings
   const [adminUsername, setAdminUsername] = useState(user.username);
   const [adminPassword, setAdminPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
@@ -47,10 +55,14 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ user, onLogout }) => {
   const emojiPickerRef = useRef<HTMLDivElement>(null);
   const attachmentInputRef = useRef<HTMLInputElement>(null);
 
-
   const fetchTeachers = useCallback(() => {
     const allUsers: User[] = JSON.parse(localStorage.getItem('users') || '[]');
     setTeachers(allUsers.filter(u => u.role === 'teacher'));
+  }, []);
+  
+  const fetchAdmins = useCallback(() => {
+    const allUsers: User[] = JSON.parse(localStorage.getItem('users') || '[]');
+    setAdmins(allUsers.filter(u => u.role === 'admin'));
   }, []);
 
   const fetchSubmittedReports = useCallback(() => {
@@ -74,9 +86,10 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ user, onLogout }) => {
 
   useEffect(() => {
     fetchTeachers();
+    fetchAdmins();
     fetchSubmittedReports();
     fetchMessages();
-  }, [fetchTeachers, fetchSubmittedReports, fetchMessages]);
+  }, [fetchTeachers, fetchAdmins, fetchSubmittedReports, fetchMessages]);
 
    useEffect(() => {
     if (chatContainerRef.current) {
@@ -84,13 +97,9 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ user, onLogout }) => {
     }
   }, [messages, selectedRecipientId]);
   
-  // Mark messages as read when a conversation is opened
   useEffect(() => {
     if (!selectedRecipientId || selectedRecipientId === 'all_teachers') return;
-    
-    // Check if there are unread messages from this sender before proceeding
     if (!unreadSenders.has(selectedRecipientId)) return;
-
     const allMessages: Message[] = JSON.parse(localStorage.getItem('messages') || '[]');
     let messagesUpdated = false;
     const updatedMessages = allMessages.map(m => {
@@ -100,14 +109,12 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ user, onLogout }) => {
         }
         return m;
     });
-
     if (messagesUpdated) {
         localStorage.setItem('messages', JSON.stringify(updatedMessages));
-        fetchMessages(); // Refetch to update unread counts
+        fetchMessages();
     }
   }, [selectedRecipientId, user.id, fetchMessages, unreadSenders]);
 
-  // Effect to close emoji picker on outside click
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
         if (emojiPickerRef.current && !emojiPickerRef.current.contains(event.target as Node)) {
@@ -115,52 +122,40 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ user, onLogout }) => {
         }
     };
     document.addEventListener('mousedown', handleClickOutside);
-    return () => {
-        document.removeEventListener('mousedown', handleClickOutside);
-    };
+    return () => { document.removeEventListener('mousedown', handleClickOutside); };
   }, []);
 
-  const handleOpenModal = (teacher: User | null = null) => {
+  // Teacher Handlers
+  const handleOpenTeacherModal = (teacher: User | null = null) => {
     if (teacher) {
       setEditingTeacher(teacher);
-      setFormData({ id: teacher.id, name: teacher.name, username: teacher.username, password: teacher.password, nip: teacher.nip || '', kelas: teacher.kelas || '' });
+      setTeacherFormData({ id: teacher.id, name: teacher.name, username: teacher.username, password: teacher.password, nip: teacher.nip || '', kelas: teacher.kelas || '' });
     } else {
       setEditingTeacher(null);
-      setFormData({ id: '', name: '', username: '', password: '', nip: '', kelas: '' });
+      setTeacherFormData({ id: '', name: '', username: '', password: '', nip: '', kelas: '' });
     }
-    setIsModalOpen(true);
+    setIsTeacherModalOpen(true);
   };
-
-  const handleCloseModal = () => {
-    setIsModalOpen(false);
-    setEditingTeacher(null);
-  };
-
-  const handleFormChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleCloseTeacherModal = () => setIsTeacherModalOpen(false);
+  const handleTeacherFormChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const { name, value } = e.target;
-    setFormData(prev => ({ ...prev, [name]: value }));
+    setTeacherFormData(prev => ({ ...prev, [name]: value }));
   };
-
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleTeacherSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     const allUsers: User[] = JSON.parse(localStorage.getItem('users') || '[]');
     if (editingTeacher) {
-      const updatedUsers = allUsers.map(u => u.id === editingTeacher.id ? { ...u, ...formData } : u);
+      const updatedUsers = allUsers.map(u => u.id === editingTeacher.id ? { ...u, ...teacherFormData } : u);
       localStorage.setItem('users', JSON.stringify(updatedUsers));
     } else {
-      const newTeacher: User = { 
-        ...formData, 
-        id: `teacher_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`, 
-        role: 'teacher' 
-      };
+      const newTeacher: User = { ...teacherFormData, id: `teacher_${Date.now()}`, role: 'teacher' };
       allUsers.push(newTeacher);
       localStorage.setItem('users', JSON.stringify(allUsers));
     }
     fetchTeachers();
-    handleCloseModal();
+    handleCloseTeacherModal();
   };
-
-  const handleDelete = (teacherId: string) => {
+  const handleDeleteTeacher = (teacherId: string) => {
     if (window.confirm('Apakah Anda yakin ingin menghapus guru ini? Semua data siswa dan kebiasaan yang terkait juga akan dihapus.')) {
       const allUsers: User[] = JSON.parse(localStorage.getItem('users') || '[]');
       const allStudents: Student[] = JSON.parse(localStorage.getItem('students') || '[]');
@@ -174,6 +169,45 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ user, onLogout }) => {
       localStorage.setItem('students', JSON.stringify(updatedStudents));
       localStorage.setItem('habit_records', JSON.stringify(updatedRecords));
       fetchTeachers();
+    }
+  };
+
+  // Admin Handlers
+  const handleOpenAdminModal = (admin: User | null = null) => {
+    if (admin) {
+        setEditingAdmin(admin);
+        setAdminFormData({ id: admin.id, name: admin.name, username: admin.username, password: admin.password });
+    } else {
+        setEditingAdmin(null);
+        setAdminFormData({ id: '', name: '', username: '', password: '' });
+    }
+    setIsAdminModalOpen(true);
+  };
+  const handleCloseAdminModal = () => setIsAdminModalOpen(false);
+  const handleAdminFormChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+      const { name, value } = e.target;
+      setAdminFormData(prev => ({ ...prev, [name]: value }));
+  };
+  const handleAdminSubmit = (e: React.FormEvent) => {
+      e.preventDefault();
+      const allUsers: User[] = JSON.parse(localStorage.getItem('users') || '[]');
+      if (editingAdmin) {
+          const updatedUsers = allUsers.map(u => u.id === editingAdmin.id ? { ...u, ...adminFormData } : u);
+          localStorage.setItem('users', JSON.stringify(updatedUsers));
+      } else {
+          const newAdmin: User = { ...adminFormData, id: `admin_${Date.now()}`, role: 'admin' };
+          allUsers.push(newAdmin);
+          localStorage.setItem('users', JSON.stringify(allUsers));
+      }
+      fetchAdmins();
+      handleCloseAdminModal();
+  };
+  const handleDeleteAdmin = (adminId: string) => {
+    if (window.confirm('Apakah Anda yakin ingin menghapus admin ini?')) {
+        const allUsers: User[] = JSON.parse(localStorage.getItem('users') || '[]');
+        const updatedUsers = allUsers.filter(user => user.id !== adminId);
+        localStorage.setItem('users', JSON.stringify(updatedUsers));
+        fetchAdmins();
     }
   };
   
@@ -200,38 +234,24 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ user, onLogout }) => {
             const sheetName = workbook.SheetNames[0];
             const worksheet = workbook.Sheets[sheetName];
             const json: any[] = XLSX.utils.sheet_to_json(worksheet);
-            
             const requiredHeaders = ['Nomor', 'Nama Guru', 'NIP', 'Kelas'];
             const fileHeaders = Object.keys(json[0] || {});
             const hasRequiredHeaders = requiredHeaders.every(h => fileHeaders.includes(h));
-
             if (json.length === 0 || !hasRequiredHeaders) {
                 alert("Format Excel tidak sesuai. Pastikan sheet pertama memiliki header kolom: 'Nomor', 'Nama Guru', 'NIP', dan 'Kelas'. 'Username' dan 'Password' bersifat opsional.");
                 return;
             }
-            
             const newTeachers: User[] = json.map((row: any, index: number): User | null => {
                 const name = String(row['Nama Guru'] || '').trim();
                 if (!name) return null;
                 const username = String(row['Username'] || '').trim() || name.toLowerCase().replace(/\s/g, '');
                 const password = String(row['Password'] || '').trim() || 'password123';
-
-                return {
-                    id: `teacher_${Date.now()}_${index}`,
-                    name: name,
-                    username: username,
-                    password: password,
-                    role: 'teacher',
-                    nip: String(row['NIP'] || ''),
-                    kelas: String(row['Kelas'] || ''),
-                };
+                return { id: `teacher_${Date.now()}_${index}`, name, username, password, role: 'teacher', nip: String(row['NIP'] || ''), kelas: String(row['Kelas'] || '') };
             }).filter((teacher): teacher is User => teacher !== null);
-
             if (newTeachers.length === 0) {
                 alert("Tidak ada data guru yang valid ditemukan di dalam file.");
                 return;
             }
-
             const allUsers: User[] = JSON.parse(localStorage.getItem('users') || '[]');
             const updatedUsers = [...allUsers, ...newTeachers];
             localStorage.setItem('users', JSON.stringify(updatedUsers));
@@ -240,11 +260,7 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ user, onLogout }) => {
         } catch (error) {
             console.error("Error importing file:", error);
             alert("Terjadi kesalahan saat mengimpor file. Pastikan file dalam format Excel yang benar.");
-        } finally {
-             if (event.target) {
-                event.target.value = '';
-            }
-        }
+        } finally { if (event.target) event.target.value = ''; }
     };
     reader.readAsArrayBuffer(file);
   };
@@ -255,28 +271,18 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ user, onLogout }) => {
       alert('Konfirmasi password tidak cocok.');
       return;
     }
-
     const allUsers: User[] = JSON.parse(localStorage.getItem('users') || '[]');
     let updatedCurrentUser: User | null = null;
     const updatedUsers = allUsers.map(u => {
       if (u.id === user.id) {
-        const updatedUser = {
-          ...u,
-          username: adminUsername,
-          password: adminPassword ? adminPassword : u.password,
-        };
+        const updatedUser = { ...u, username: adminUsername, password: adminPassword ? adminPassword : u.password };
         updatedCurrentUser = updatedUser;
         return updatedUser;
       }
       return u;
     });
-
     localStorage.setItem('users', JSON.stringify(updatedUsers));
-
-    if (updatedCurrentUser) {
-      sessionStorage.setItem('currentUser', JSON.stringify(updatedCurrentUser));
-    }
-
+    if (updatedCurrentUser) sessionStorage.setItem('currentUser', JSON.stringify(updatedCurrentUser));
     alert('Username dan/atau password admin berhasil diperbarui. Perubahan akan terlihat sepenuhnya setelah login kembali.');
     setAdminPassword('');
     setConfirmPassword('');
@@ -286,28 +292,18 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ user, onLogout }) => {
     const wb = XLSX.utils.book_new();
     const sheetData = report.reportData;
     const merges: any[] = [];
-    
     const habitHeadersRow = sheetData.find(row => row.includes('Nama Peserta Didik')) || [];
     const numCols = (habitHeadersRow.length || 3) - 1;
-
     merges.push({ s: { r: 0, c: 0 }, e: { r: 0, c: numCols } });
     merges.push({ s: { r: 1, c: 0 }, e: { r: 1, c: numCols } });
     merges.push({ s: { r: 2, c: 0 }, e: { r: 2, c: 1 } });
-
     sheetData.forEach((row, rowIndex) => {
-        if (String(row[0]).startsWith('TANGGAL')) {
-             merges.push({ s: { r: rowIndex, c: 0 }, e: { r: rowIndex, c: numCols } });
-        }
+        if (String(row[0]).startsWith('TANGGAL')) merges.push({ s: { r: rowIndex, c: 0 }, e: { r: rowIndex, c: numCols } });
     });
-
     const ws = XLSX.utils.aoa_to_sheet(sheetData);
     ws['!merges'] = merges;
-    
-    const colWidths = [ { wch: 5 }, { wch: 30 }, ...habitHeadersRow.slice(2).map(() => ({ wch: 25 })) ];
-    ws['!cols'] = colWidths;
-
+    ws['!cols'] = [ { wch: 5 }, { wch: 30 }, ...habitHeadersRow.slice(2).map(() => ({ wch: 25 })) ];
     XLSX.utils.book_append_sheet(wb, ws, `Laporan ${report.monthName} ${report.year}`);
-    
     const fileName = `laporan_${report.className}_${report.teacherName}_${report.monthName}_${report.year}.xlsx`.replace(/\s/g, '_');
     XLSX.writeFile(wb, fileName);
   };
@@ -326,22 +322,12 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ user, onLogout }) => {
     e.preventDefault();
     if (!newMessage.trim() && !attachment) return;
     if (!selectedRecipientId) return;
-
     const allMessages: Message[] = JSON.parse(localStorage.getItem('messages') || '[]');
     const message: Message = {
-        id: `msg_${Date.now()}`,
-        senderId: user.id,
-        senderName: user.name,
-        recipientId: selectedRecipientId,
-        content: newMessage,
-        timestamp: new Date().toISOString(),
-        read: false,
-        attachment: attachment || undefined,
+        id: `msg_${Date.now()}`, senderId: user.id, senderName: user.name, recipientId: selectedRecipientId, content: newMessage, timestamp: new Date().toISOString(), read: false, attachment: attachment || undefined,
     };
-    
     allMessages.push(message);
     localStorage.setItem('messages', JSON.stringify(allMessages));
-    
     fetchMessages();
     setNewMessage('');
     setAttachment(null);
@@ -357,46 +343,23 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ user, onLogout }) => {
     }
   };
 
-  const handleAttachmentClick = () => {
-    attachmentInputRef.current?.click();
-  };
-  
+  const handleAttachmentClick = () => attachmentInputRef.current?.click();
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
       const file = e.target.files?.[0];
       if (file) {
-          if (file.size > 5 * 1024 * 1024) { // 5MB limit
-              alert('Ukuran file tidak boleh melebihi 5MB.');
-              return;
-          }
+          if (file.size > 5 * 1024 * 1024) { alert('Ukuran file tidak boleh melebihi 5MB.'); return; }
           const reader = new FileReader();
-          reader.onload = (event) => {
-              setAttachment({
-                  name: file.name,
-                  type: file.type,
-                  data: event.target?.result as string,
-              });
-          };
+          reader.onload = (event) => setAttachment({ name: file.name, type: file.type, data: event.target?.result as string });
           reader.readAsDataURL(file);
       }
       e.target.value = '';
   };
-  
-  const handleEmojiSelect = (emoji: string) => {
-    setNewMessage(prev => prev + emoji);
-  };
+  const handleEmojiSelect = (emoji: string) => setNewMessage(prev => prev + emoji);
 
   const getFilteredMessages = () => {
     if (!selectedRecipientId) return [];
-
-    if (selectedRecipientId === 'all_teachers') {
-        return messages.filter(m => m.recipientId === 'all_teachers');
-    }
-
-    return messages.filter(m => 
-        (m.senderId === user.id && m.recipientId === selectedRecipientId) ||
-        (m.senderId === selectedRecipientId && m.recipientId === user.id) ||
-        (m.recipientId === 'all_teachers' && m.senderId === user.id)
-    ).sort((a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime());
+    if (selectedRecipientId === 'all_teachers') return messages.filter(m => m.recipientId === 'all_teachers');
+    return messages.filter(m => (m.senderId === user.id && m.recipientId === selectedRecipientId) || (m.senderId === selectedRecipientId && m.recipientId === user.id) || (m.recipientId === 'all_teachers' && m.senderId === user.id)).sort((a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime());
   };
 
   const selectedRecipientName = teachers.find(t => t.id === selectedRecipientId)?.name || 'Semua Guru (Broadcast)';
@@ -413,6 +376,7 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ user, onLogout }) => {
            <div className="border-b border-gray-200">
                 <nav className="-mb-px flex space-x-8" aria-label="Tabs">
                     <button onClick={() => setActiveTab('teachers')} className={tabClass('teachers')}>Manajemen Guru</button>
+                    <button onClick={() => setActiveTab('admins')} className={tabClass('admins')}>Manajemen Admin</button>
                     <button onClick={() => setActiveTab('reports')} className={tabClass('reports')}>Laporan Guru</button>
                     <button onClick={() => setActiveTab('messages')} className={tabClass('messages')}>
                         Pesan
@@ -429,7 +393,7 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ user, onLogout }) => {
                       <div className="flex gap-2">
                           <Button onClick={handleDownloadTemplate} variant="secondary">Unduh Format</Button>
                           <Button onClick={handleImportClick} variant="secondary">Import Guru</Button>
-                          <Button onClick={() => handleOpenModal()}><PlusIcon className="w-5 h-5" /><span>Tambah Guru</span></Button>
+                          <Button onClick={() => handleOpenTeacherModal()}><PlusIcon className="w-5 h-5" /><span>Tambah Guru</span></Button>
                           <input type="file" ref={fileInputRef} onChange={handleFileImport} className="hidden" accept=".xlsx, .xls"/>
                       </div>
                     </div>
@@ -448,8 +412,45 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ user, onLogout }) => {
                             <tr key={teacher.id} className="border-b hover:bg-gray-50">
                               <td className="p-3">{index + 1}</td><td className="p-3">{teacher.name}</td><td className="p-3">{teacher.username}</td><td className="p-3">{teacher.password}</td><td className="p-3">{teacher.nip || '-'}</td><td className="p-3">{teacher.kelas || '-'}</td>
                               <td className="p-3 flex gap-2">
-                                <button onClick={() => handleOpenModal(teacher)} className="text-primary-600 hover:text-primary-800"><EditIcon /></button>
-                                <button onClick={() => handleDelete(teacher.id)} className="text-red-600 hover:text-red-800"><TrashIcon /></button>
+                                <button onClick={() => handleOpenTeacherModal(teacher)} className="text-primary-600 hover:text-primary-800"><EditIcon /></button>
+                                <button onClick={() => handleDeleteTeacher(teacher.id)} className="text-red-600 hover:text-red-800"><TrashIcon /></button>
+                              </td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  </div>
+                )}
+                {activeTab === 'admins' && (
+                  <div>
+                    <div className="flex justify-between items-center mb-4">
+                      <h2 className="text-xl font-semibold text-primary-700">Manajemen Admin</h2>
+                      <Button onClick={() => handleOpenAdminModal()}><PlusIcon className="w-5 h-5" /><span>Tambah Admin</span></Button>
+                    </div>
+                    <div className="overflow-x-auto">
+                      <table className="w-full text-left">
+                        <thead className="bg-primary-100">
+                          <tr>
+                            <th className="p-3">No.</th><th className="p-3">Nama Admin</th><th className="p-3">Username</th><th className="p-3">Aksi</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {admins.map((admin, index) => (
+                            <tr key={admin.id} className="border-b hover:bg-gray-50">
+                              <td className="p-3">{index + 1}</td>
+                              <td className="p-3">{admin.name}</td>
+                              <td className="p-3">{admin.username}</td>
+                              <td className="p-3 flex gap-2">
+                                <button onClick={() => handleOpenAdminModal(admin)} className="text-primary-600 hover:text-primary-800"><EditIcon /></button>
+                                <button 
+                                  onClick={() => handleDeleteAdmin(admin.id)} 
+                                  className={`text-red-600 hover:text-red-800 ${admin.id === user.id ? 'opacity-50 cursor-not-allowed' : ''}`}
+                                  disabled={admin.id === user.id}
+                                  title={admin.id === user.id ? "Anda tidak dapat menghapus akun sendiri" : "Hapus admin"}
+                                >
+                                  <TrashIcon />
+                                </button>
                               </td>
                             </tr>
                           ))}
@@ -491,7 +492,6 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ user, onLogout }) => {
                   <div>
                      <h2 className="text-xl font-semibold text-primary-700 mb-4">Pesan</h2>
                      <div className="flex border rounded-lg h-[60vh] bg-gray-50">
-                        {/* Recipient List */}
                         <div className="w-1/3 border-r">
                             <div className="p-2 border-b bg-primary-100 font-semibold text-primary-800">Daftar Guru</div>
                             <ul className="overflow-y-auto h-[calc(60vh-41px)]">
@@ -509,7 +509,6 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ user, onLogout }) => {
                                 ))}
                             </ul>
                         </div>
-                        {/* Chat Window */}
                         <div className="w-2/3 flex flex-col">
                             {selectedRecipientId ? (
                                 <>
@@ -550,46 +549,29 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ user, onLogout }) => {
                                         )}
                                         <form onSubmit={handleSendMessage} className="flex items-center gap-2">
                                             <input type="file" ref={attachmentInputRef} onChange={handleFileChange} className="hidden" />
-                                            <button type="button" onClick={handleAttachmentClick} className="p-2 text-gray-500 hover:text-primary-600">
-                                              <AttachmentIcon />
-                                            </button>
+                                            <button type="button" onClick={handleAttachmentClick} className="p-2 text-gray-500 hover:text-primary-600"><AttachmentIcon /></button>
                                             <div className="relative">
-                                              <button type="button" onClick={() => setShowEmojiPicker(prev => !prev)} className="p-2 text-gray-500 hover:text-primary-600">
-                                                <EmojiIcon />
-                                              </button>
+                                              <button type="button" onClick={() => setShowEmojiPicker(prev => !prev)} className="p-2 text-gray-500 hover:text-primary-600"><EmojiIcon /></button>
                                               {showEmojiPicker && (
                                                 <div ref={emojiPickerRef} className="absolute bottom-full mb-2 bg-white border rounded-lg shadow-lg p-2 z-10 w-64">
                                                     <div className="text-sm font-semibold text-gray-600 pb-1">Emojis</div>
                                                     <div className="grid grid-cols-5 gap-1">
-                                                      {EMOJIS.map(emoji => (
-                                                        <button key={emoji} type="button" onClick={() => handleEmojiSelect(emoji)} className="text-2xl p-1 rounded hover:bg-gray-200 transition-colors">{emoji}</button>
-                                                      ))}
+                                                      {EMOJIS.map(emoji => (<button key={emoji} type="button" onClick={() => handleEmojiSelect(emoji)} className="text-2xl p-1 rounded hover:bg-gray-200 transition-colors">{emoji}</button>))}
                                                     </div>
                                                     <div className="text-sm font-semibold text-gray-600 pt-2 mt-2 border-t">Stickers</div>
                                                     <div className="grid grid-cols-5 gap-1">
-                                                      {STICKERS.map(sticker => (
-                                                        <button key={sticker} type="button" onClick={() => handleEmojiSelect(sticker)} className="text-3xl p-1 rounded hover:bg-gray-200 transition-colors">{sticker}</button>
-                                                      ))}
+                                                      {STICKERS.map(sticker => (<button key={sticker} type="button" onClick={() => handleEmojiSelect(sticker)} className="text-3xl p-1 rounded hover:bg-gray-200 transition-colors">{sticker}</button>))}
                                                     </div>
                                                 </div>
                                               )}
                                             </div>
-                                            <input
-                                                type="text"
-                                                value={newMessage}
-                                                onChange={(e) => setNewMessage(e.target.value)}
-                                                placeholder="Ketik pesan..."
-                                                className="flex-1 px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-primary-500 focus:border-primary-500"
-                                                autoComplete="off"
-                                            />
+                                            <input type="text" value={newMessage} onChange={(e) => setNewMessage(e.target.value)} placeholder="Ketik pesan..." className="flex-1 px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-primary-500 focus:border-primary-500" autoComplete="off" />
                                             <Button type="submit">Kirim</Button>
                                         </form>
                                     </div>
                                 </>
                             ) : (
-                                <div className="flex-1 flex items-center justify-center text-gray-500">
-                                    Pilih guru dari daftar untuk memulai percakapan.
-                                </div>
+                                <div className="flex-1 flex items-center justify-center text-gray-500">Pilih guru dari daftar untuk memulai percakapan.</div>
                             )}
                         </div>
                      </div>
@@ -599,18 +581,9 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ user, onLogout }) => {
                   <div>
                     <h2 className="text-xl font-semibold text-primary-700 mb-4">Pengaturan Akun Admin</h2>
                     <form onSubmit={handleAdminAccountUpdate} className="space-y-4 max-w-lg">
-                        <div>
-                            <label htmlFor="adminUsername" className="block text-sm font-medium text-gray-700">Username Admin</label>
-                            <input type="text" name="adminUsername" id="adminUsername" value={adminUsername} onChange={(e) => setAdminUsername(e.target.value)} required className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-primary-500 focus:border-primary-500" />
-                        </div>
-                        <div>
-                            <label htmlFor="adminPassword" className="block text-sm font-medium text-gray-700">Password Baru (opsional)</label>
-                            <input type="password" name="adminPassword" id="adminPassword" value={adminPassword} onChange={(e) => setAdminPassword(e.target.value)} placeholder="Kosongkan jika tidak ingin ganti" className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-primary-500 focus:border-primary-500" />
-                        </div>
-                        <div>
-                            <label htmlFor="confirmPassword" className="block text-sm font-medium text-gray-700">Konfirmasi Password Baru</label>
-                            <input type="password" name="confirmPassword" id="confirmPassword" value={confirmPassword} onChange={(e) => setConfirmPassword(e.target.value)} placeholder="Ulangi password baru" className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-primary-500 focus:border-primary-500" />
-                        </div>
+                        <div><label htmlFor="adminUsername" className="block text-sm font-medium text-gray-700">Username Admin</label><input type="text" name="adminUsername" id="adminUsername" value={adminUsername} onChange={(e) => setAdminUsername(e.target.value)} required className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-primary-500 focus:border-primary-500" /></div>
+                        <div><label htmlFor="adminPassword" className="block text-sm font-medium text-gray-700">Password Baru (opsional)</label><input type="password" name="adminPassword" id="adminPassword" value={adminPassword} onChange={(e) => setAdminPassword(e.target.value)} placeholder="Kosongkan jika tidak ingin ganti" className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-primary-500 focus:border-primary-500" /></div>
+                        <div><label htmlFor="confirmPassword" className="block text-sm font-medium text-gray-700">Konfirmasi Password Baru</label><input type="password" name="confirmPassword" id="confirmPassword" value={confirmPassword} onChange={(e) => setConfirmPassword(e.target.value)} placeholder="Ulangi password baru" className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-primary-500 focus:border-primary-500" /></div>
                         <div className="pt-2"><Button type="submit">Simpan Perubahan Akun</Button></div>
                     </form>
                   </div>
@@ -619,14 +592,23 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ user, onLogout }) => {
         </div>
       </main>
       
-      <Modal isOpen={isModalOpen} onClose={handleCloseModal} title={editingTeacher ? 'Edit Guru' : 'Tambah Guru'}>
-        <form onSubmit={handleSubmit} className="space-y-4">
-          <div><label htmlFor="name" className="block text-sm font-medium text-gray-700">Nama Guru</label><input type="text" name="name" id="name" value={formData.name} onChange={handleFormChange} required className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-primary-500 focus:border-primary-500" /></div>
-          <div><label htmlFor="username" className="block text-sm font-medium text-gray-700">Username</label><input type="text" name="username" id="username" value={formData.username} onChange={handleFormChange} required className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-primary-500 focus:border-primary-500" /></div>
-          <div><label htmlFor="password" className="block text-sm font-medium text-gray-700">Password</label><input type="text" name="password" id="password" value={formData.password} onChange={handleFormChange} required className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-primary-500 focus:border-primary-500" /></div>
-          <div><label htmlFor="nip" className="block text-sm font-medium text-gray-700">NIP</label><input type="text" name="nip" id="nip" value={formData.nip} onChange={handleFormChange} className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-primary-500 focus:border-primary-500" /></div>
-          <div><label htmlFor="kelas" className="block text-sm font-medium text-gray-700">Kelas</label><input type="text" name="kelas" id="kelas" value={formData.kelas} onChange={handleFormChange} className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-primary-500 focus:border-primary-500" /></div>
-          <div className="flex justify-end gap-2 pt-4"><Button type="button" variant="secondary" onClick={handleCloseModal}>Batal</Button><Button type="submit">Simpan</Button></div>
+      <Modal isOpen={isTeacherModalOpen} onClose={handleCloseTeacherModal} title={editingTeacher ? 'Edit Guru' : 'Tambah Guru'}>
+        <form onSubmit={handleTeacherSubmit} className="space-y-4">
+          <div><label htmlFor="name" className="block text-sm font-medium text-gray-700">Nama Guru</label><input type="text" name="name" id="name" value={teacherFormData.name} onChange={handleTeacherFormChange} required className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-primary-500 focus:border-primary-500" /></div>
+          <div><label htmlFor="username" className="block text-sm font-medium text-gray-700">Username</label><input type="text" name="username" id="username" value={teacherFormData.username} onChange={handleTeacherFormChange} required className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-primary-500 focus:border-primary-500" /></div>
+          <div><label htmlFor="password" className="block text-sm font-medium text-gray-700">Password</label><input type="text" name="password" id="password" value={teacherFormData.password} onChange={handleTeacherFormChange} required className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-primary-500 focus:border-primary-500" /></div>
+          <div><label htmlFor="nip" className="block text-sm font-medium text-gray-700">NIP</label><input type="text" name="nip" id="nip" value={teacherFormData.nip} onChange={handleTeacherFormChange} className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-primary-500 focus:border-primary-500" /></div>
+          <div><label htmlFor="kelas" className="block text-sm font-medium text-gray-700">Kelas</label><input type="text" name="kelas" id="kelas" value={teacherFormData.kelas} onChange={handleTeacherFormChange} className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-primary-500 focus:border-primary-500" /></div>
+          <div className="flex justify-end gap-2 pt-4"><Button type="button" variant="secondary" onClick={handleCloseTeacherModal}>Batal</Button><Button type="submit">Simpan</Button></div>
+        </form>
+      </Modal>
+
+      <Modal isOpen={isAdminModalOpen} onClose={handleCloseAdminModal} title={editingAdmin ? 'Edit Admin' : 'Tambah Admin'}>
+        <form onSubmit={handleAdminSubmit} className="space-y-4">
+          <div><label htmlFor="admin-name" className="block text-sm font-medium text-gray-700">Nama Admin</label><input type="text" name="name" id="admin-name" value={adminFormData.name} onChange={handleAdminFormChange} required className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-primary-500 focus:border-primary-500" /></div>
+          <div><label htmlFor="admin-username" className="block text-sm font-medium text-gray-700">Username</label><input type="text" name="username" id="admin-username" value={adminFormData.username} onChange={handleAdminFormChange} required className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-primary-500 focus:border-primary-500" /></div>
+          <div><label htmlFor="admin-password" className="block text-sm font-medium text-gray-700">Password</label><input type="text" name="password" id="admin-password" value={adminFormData.password} onChange={handleAdminFormChange} required className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-primary-500 focus:border-primary-500" /></div>
+          <div className="flex justify-end gap-2 pt-4"><Button type="button" variant="secondary" onClick={handleCloseAdminModal}>Batal</Button><Button type="submit">Simpan</Button></div>
         </form>
       </Modal>
     </>
