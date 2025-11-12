@@ -44,6 +44,12 @@ export interface AdminReport {
   reportData: any[][]; // The data structure for XLSX aoa_to_sheet
 }
 
+export interface Attachment {
+  name: string;
+  type: string; // MIME type
+  data: string; // base64 data URL
+}
+
 export interface Message {
   id: string;
   senderId: string;
@@ -52,4 +58,5 @@ export interface Message {
   content: string;
   timestamp: string; // ISO string
   read: boolean;
+  attachment?: Attachment;
 }

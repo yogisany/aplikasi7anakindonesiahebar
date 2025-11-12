@@ -1,6 +1,6 @@
 
 import React, { useState, useEffect, useCallback, useRef } from 'react';
-import { User, Student, HabitRecord, AdminReport, Message } from '../types';
+import { User, Student, HabitRecord, AdminReport, Message, Attachment } from '../types';
 import Header from '../components/Header';
 import Button from '../components/Button';
 import Modal from '../components/Modal';
@@ -8,6 +8,8 @@ import PlusIcon from '../components/icons/PlusIcon';
 import EditIcon from '../components/icons/EditIcon';
 import TrashIcon from '../components/icons/TrashIcon';
 import EmojiIcon from '../components/icons/EmojiIcon';
+import AttachmentIcon from '../components/icons/AttachmentIcon';
+import DownloadIcon from '../components/icons/DownloadIcon';
 
 // Declare XLSX from global scope
 declare const XLSX: any;
@@ -38,10 +40,12 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ user, onLogout }) => {
   const [messages, setMessages] = useState<Message[]>([]);
   const [selectedRecipientId, setSelectedRecipientId] = useState<string | null>(null);
   const [newMessage, setNewMessage] = useState('');
+  const [attachment, setAttachment] = useState<Attachment | null>(null);
   const [unreadSenders, setUnreadSenders] = useState<Set<string>>(new Set());
   const [showEmojiPicker, setShowEmojiPicker] = useState(false);
   const chatContainerRef = useRef<HTMLDivElement>(null);
   const emojiPickerRef = useRef<HTMLDivElement>(null);
+  const attachmentInputRef = useRef<HTMLInputElement>(null);
 
 
   const fetchTeachers = useCallback(() => {
@@ -320,7 +324,8 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ user, onLogout }) => {
 
   const handleSendMessage = (e: React.FormEvent) => {
     e.preventDefault();
-    if (!newMessage.trim() || !selectedRecipientId) return;
+    if (!newMessage.trim() && !attachment) return;
+    if (!selectedRecipientId) return;
 
     const allMessages: Message[] = JSON.parse(localStorage.getItem('messages') || '[]');
     const message: Message = {
@@ -331,6 +336,7 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ user, onLogout }) => {
         content: newMessage,
         timestamp: new Date().toISOString(),
         read: false,
+        attachment: attachment || undefined,
     };
     
     allMessages.push(message);
@@ -338,7 +344,32 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ user, onLogout }) => {
     
     fetchMessages();
     setNewMessage('');
+    setAttachment(null);
     setShowEmojiPicker(false);
+  };
+
+  const handleAttachmentClick = () => {
+    attachmentInputRef.current?.click();
+  };
+  
+  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+      const file = e.target.files?.[0];
+      if (file) {
+          if (file.size > 5 * 1024 * 1024) { // 5MB limit
+              alert('Ukuran file tidak boleh melebihi 5MB.');
+              return;
+          }
+          const reader = new FileReader();
+          reader.onload = (event) => {
+              setAttachment({
+                  name: file.name,
+                  type: file.type,
+                  data: event.target?.result as string,
+              });
+          };
+          reader.readAsDataURL(file);
+      }
+      e.target.value = '';
   };
   
   const handleEmojiSelect = (emoji: string) => {
@@ -480,44 +511,66 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ user, onLogout }) => {
                                       {currentConversation.map(msg => (
                                           <div key={msg.id} className={`flex ${msg.senderId === user.id ? 'justify-end' : 'justify-start'}`}>
                                               <div className={`max-w-xs lg:max-w-md p-3 rounded-lg ${msg.senderId === user.id ? 'bg-primary-500 text-white' : 'bg-gray-200'}`}>
-                                                  <p className="text-sm break-words">{msg.content}</p>
-                                                  <p className={`text-xs mt-1 ${msg.senderId === user.id ? 'text-blue-100' : 'text-gray-500'}`}>{new Date(msg.timestamp).toLocaleTimeString('id-ID', { hour: '2-digit', minute:'2-digit' })}</p>
+                                                  {msg.attachment?.type.startsWith('image/') ? (
+                                                    <a href={msg.attachment.data} target="_blank" rel="noopener noreferrer">
+                                                      <img src={msg.attachment.data} alt={msg.attachment.name} className="max-w-full h-auto rounded-lg mb-2 cursor-pointer" style={{maxHeight: '200px'}} />
+                                                    </a>
+                                                  ) : msg.attachment ? (
+                                                    <a href={msg.attachment.data} download={msg.attachment.name} className={`flex items-center gap-2 p-2 mb-2 rounded-lg transition-colors ${msg.senderId === user.id ? 'bg-primary-400 hover:bg-primary-300' : 'bg-gray-300 hover:bg-gray-400'}`}>
+                                                      <DownloadIcon className="w-5 h-5 flex-shrink-0" />
+                                                      <span className="text-sm font-medium truncate">{msg.attachment.name}</span>
+                                                    </a>
+                                                  ) : null}
+                                                  {msg.content && <p className="text-sm break-words">{msg.content}</p>}
+                                                  <p className={`text-xs mt-1 text-right ${msg.senderId === user.id ? 'text-blue-100' : 'text-gray-500'}`}>{new Date(msg.timestamp).toLocaleTimeString('id-ID', { hour: '2-digit', minute:'2-digit' })}</p>
                                               </div>
                                           </div>
                                       ))}
                                     </div>
-                                    <form onSubmit={handleSendMessage} className="p-3 border-t bg-white flex items-center gap-2">
-                                        <div className="relative">
-                                          <button type="button" onClick={() => setShowEmojiPicker(prev => !prev)} className="p-2 text-gray-500 hover:text-primary-600">
-                                            <EmojiIcon />
-                                          </button>
-                                          {showEmojiPicker && (
-                                            <div ref={emojiPickerRef} className="absolute bottom-full mb-2 bg-white border rounded-lg shadow-lg p-2 z-10 w-64">
-                                                <div className="text-sm font-semibold text-gray-600 pb-1">Emojis</div>
-                                                <div className="grid grid-cols-5 gap-1">
-                                                  {EMOJIS.map(emoji => (
-                                                    <button key={emoji} type="button" onClick={() => handleEmojiSelect(emoji)} className="text-2xl p-1 rounded hover:bg-gray-200 transition-colors">{emoji}</button>
-                                                  ))}
-                                                </div>
-                                                <div className="text-sm font-semibold text-gray-600 pt-2 mt-2 border-t">Stickers</div>
-                                                <div className="grid grid-cols-5 gap-1">
-                                                  {STICKERS.map(sticker => (
-                                                    <button key={sticker} type="button" onClick={() => handleEmojiSelect(sticker)} className="text-3xl p-1 rounded hover:bg-gray-200 transition-colors">{sticker}</button>
-                                                  ))}
-                                                </div>
+                                    <div className="p-3 border-t bg-white">
+                                        {attachment && (
+                                            <div className="mb-2 p-2 border rounded-md flex items-center justify-between bg-gray-100">
+                                                <span className="text-sm text-gray-700 truncate pr-2">{attachment.name}</span>
+                                                <button type="button" onClick={() => setAttachment(null)} className="text-red-500 hover:text-red-700 font-bold text-lg leading-none">&times;</button>
                                             </div>
-                                          )}
-                                        </div>
-                                        <input
-                                            type="text"
-                                            value={newMessage}
-                                            onChange={(e) => setNewMessage(e.target.value)}
-                                            placeholder="Ketik pesan..."
-                                            className="flex-1 px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-primary-500 focus:border-primary-500"
-                                            autoComplete="off"
-                                        />
-                                        <Button type="submit">Kirim</Button>
-                                    </form>
+                                        )}
+                                        <form onSubmit={handleSendMessage} className="flex items-center gap-2">
+                                            <input type="file" ref={attachmentInputRef} onChange={handleFileChange} className="hidden" />
+                                            <button type="button" onClick={handleAttachmentClick} className="p-2 text-gray-500 hover:text-primary-600">
+                                              <AttachmentIcon />
+                                            </button>
+                                            <div className="relative">
+                                              <button type="button" onClick={() => setShowEmojiPicker(prev => !prev)} className="p-2 text-gray-500 hover:text-primary-600">
+                                                <EmojiIcon />
+                                              </button>
+                                              {showEmojiPicker && (
+                                                <div ref={emojiPickerRef} className="absolute bottom-full mb-2 bg-white border rounded-lg shadow-lg p-2 z-10 w-64">
+                                                    <div className="text-sm font-semibold text-gray-600 pb-1">Emojis</div>
+                                                    <div className="grid grid-cols-5 gap-1">
+                                                      {EMOJIS.map(emoji => (
+                                                        <button key={emoji} type="button" onClick={() => handleEmojiSelect(emoji)} className="text-2xl p-1 rounded hover:bg-gray-200 transition-colors">{emoji}</button>
+                                                      ))}
+                                                    </div>
+                                                    <div className="text-sm font-semibold text-gray-600 pt-2 mt-2 border-t">Stickers</div>
+                                                    <div className="grid grid-cols-5 gap-1">
+                                                      {STICKERS.map(sticker => (
+                                                        <button key={sticker} type="button" onClick={() => handleEmojiSelect(sticker)} className="text-3xl p-1 rounded hover:bg-gray-200 transition-colors">{sticker}</button>
+                                                      ))}
+                                                    </div>
+                                                </div>
+                                              )}
+                                            </div>
+                                            <input
+                                                type="text"
+                                                value={newMessage}
+                                                onChange={(e) => setNewMessage(e.target.value)}
+                                                placeholder="Ketik pesan..."
+                                                className="flex-1 px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-primary-500 focus:border-primary-500"
+                                                autoComplete="off"
+                                            />
+                                            <Button type="submit">Kirim</Button>
+                                        </form>
+                                    </div>
                                 </>
                             ) : (
                                 <div className="flex-1 flex items-center justify-center text-gray-500">
