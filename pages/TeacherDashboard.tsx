@@ -46,6 +46,9 @@ const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ user, onLogout }) =
   const [isStudentModalOpen, setIsStudentModalOpen] = useState(false);
   const [editingStudent, setEditingStudent] = useState<Student | null>(null);
   const [studentFormData, setStudentFormData] = useState({ id: '', name: '', nisn: '', class: '' });
+  const [isBulkDeleteMode, setIsBulkDeleteMode] = useState(false);
+  const [selectedStudents, setSelectedStudents] = useState<Set<string>>(new Set());
+
 
   // Habit State
   const [records, setRecords] = useState<HabitRecord[]>([]);
@@ -141,6 +144,53 @@ const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ user, onLogout }) =
       fetchStudents();
       fetchRecords();
     }
+  };
+
+  // Bulk Delete Handlers
+  const handleSelectStudent = (studentId: string) => {
+    setSelectedStudents(prevSelected => {
+        const newSelected = new Set(prevSelected);
+        if (newSelected.has(studentId)) {
+            newSelected.delete(studentId);
+        } else {
+            newSelected.add(studentId);
+        }
+        return newSelected;
+    });
+  };
+
+  const handleSelectAll = (e: React.ChangeEvent<HTMLInputElement>) => {
+      if (e.target.checked) {
+          const allStudentIds = new Set(students.map(s => s.id));
+          setSelectedStudents(allStudentIds);
+      } else {
+          setSelectedStudents(new Set());
+      }
+  };
+
+  const handleConfirmBulkDelete = () => {
+      if (selectedStudents.size === 0) {
+          alert('Tidak ada siswa yang dipilih.');
+          return;
+      }
+
+      if (window.confirm(`Yakin ingin menghapus ${selectedStudents.size} siswa? Tindakan ini tidak dapat dibatalkan dan akan menghapus semua data kebiasaan mereka.`)) {
+          let allStudents: Student[] = JSON.parse(localStorage.getItem('students') || '[]');
+          let allRecords: HabitRecord[] = JSON.parse(localStorage.getItem('habit_records') || '[]');
+
+          const updatedStudents = allStudents.filter(s => !selectedStudents.has(s.id));
+          const updatedRecords = allRecords.filter(r => !selectedStudents.has(r.studentId));
+
+          localStorage.setItem('students', JSON.stringify(updatedStudents));
+          localStorage.setItem('habit_records', JSON.stringify(updatedRecords));
+
+          fetchStudents();
+          fetchRecords();
+
+          alert(`${selectedStudents.size} siswa berhasil dihapus.`);
+          setIsBulkDeleteMode(false);
+          setSelectedStudents(new Set());
+      }
   };
 
   // Excel Handlers
@@ -392,10 +442,25 @@ const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ user, onLogout }) =
                     <div>
                         <div className="flex flex-col sm:flex-row gap-4 justify-between items-start sm:items-center mb-2">
                             <h2 className="text-xl font-semibold text-primary-700">Data Peserta Didik</h2>
-                            <div className="flex gap-2">
-                                <Button onClick={handleDownloadTemplate} variant="secondary">Unduh Format</Button>
-                                <Button onClick={handleImportClick} variant="secondary">Import Excel</Button>
-                                <Button onClick={() => handleOpenStudentModal()}><PlusIcon /><span>Tambah Siswa</span></Button>
+                            <div className="flex gap-2 flex-wrap">
+                                {!isBulkDeleteMode ? (
+                                    <>
+                                        <Button onClick={handleDownloadTemplate} variant="secondary">Unduh Format</Button>
+                                        <Button onClick={handleImportClick} variant="secondary">Import Excel</Button>
+                                        <Button onClick={() => handleOpenStudentModal()}><PlusIcon /><span>Tambah Siswa</span></Button>
+                                        <Button onClick={() => setIsBulkDeleteMode(true)} variant="danger">Hapus Massal</Button>
+                                    </>
+                                ) : (
+                                    <>
+                                        <Button onClick={handleConfirmBulkDelete} variant="danger" disabled={selectedStudents.size === 0}>
+                                            Hapus ({selectedStudents.size}) Siswa
+                                        </Button>
+                                        <Button onClick={() => {
+                                            setIsBulkDeleteMode(false);
+                                            setSelectedStudents(new Set());
+                                        }} variant="secondary">Batal</Button>
+                                    </>
+                                )}
                             </div>
                         </div>
                         <p className="text-sm text-gray-500 mb-4">
@@ -412,6 +477,17 @@ const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ user, onLogout }) =
                             <table className="w-full text-left">
                               <thead className="bg-primary-100">
                                 <tr>
+                                  {isBulkDeleteMode && (
+                                    <th className="p-3 w-12 text-center">
+                                      <input
+                                        type="checkbox"
+                                        className="h-5 w-5 text-primary-600 border-gray-300 rounded focus:ring-primary-500"
+                                        onChange={handleSelectAll}
+                                        checked={students.length > 0 && selectedStudents.size === students.length}
+                                        aria-label="Pilih semua siswa"
+                                      />
+                                    </th>
+                                  )}
                                   <th className="p-3 w-12">No.</th>
                                   <th className="p-3">Nama</th>
                                   <th className="p-3">NISN</th>
@@ -422,13 +498,28 @@ const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ user, onLogout }) =
                               <tbody>
                                 {students.map((s, index) => (
                                   <tr key={s.id} className="border-b hover:bg-gray-50">
+                                    {isBulkDeleteMode && (
+                                      <td className="p-3 text-center">
+                                        <input
+                                          type="checkbox"
+                                          className="h-5 w-5 text-primary-600 border-gray-300 rounded focus:ring-primary-500"
+                                          checked={selectedStudents.has(s.id)}
+                                          onChange={() => handleSelectStudent(s.id)}
+                                          aria-label={`Pilih ${s.name}`}
+                                        />
+                                      </td>
+                                    )}
                                     <td className="p-3 text-center">{index + 1}</td>
                                     <td className="p-3">{s.name}</td>
                                     <td className="p-3">{s.nisn}</td>
                                     <td className="p-3">{s.class}</td>
                                     <td className="p-3 flex gap-2">
-                                      <button onClick={() => handleOpenStudentModal(s)} className="text-primary-600 hover:text-primary-800"><EditIcon /></button>
-                                      <button onClick={() => handleStudentDelete(s.id)} className="text-red-600 hover:text-red-800"><TrashIcon /></button>
+                                      {!isBulkDeleteMode && (
+                                        <>
+                                          <button onClick={() => handleOpenStudentModal(s)} className="text-primary-600 hover:text-primary-800"><EditIcon /></button>
+                                          <button onClick={() => handleStudentDelete(s.id)} className="text-red-600 hover:text-red-800"><TrashIcon /></button>
+                                        </>
+                                      )}
                                     </td>
                                   </tr>
                                 ))}
