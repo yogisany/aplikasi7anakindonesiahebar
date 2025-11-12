@@ -573,7 +573,7 @@ const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ user, onLogout }) =
                             <div className="p-6 border rounded-lg shadow-sm bg-primary-50">
                                 <h3 className="text-xl font-semibold mb-4 text-primary-800">Scan QRIS</h3>
                                 <img 
-                                    src="https://saweria.co/widgets/qr?streamKey=0597509df18cd735a259a5f06c01380d"
+                                    src="https://i.ibb.co.com/YT4dT6cK/KODE-QRIS-YOGI-SANY.jpg"
                                     alt="QRIS Code for Donation" 
                                     className="w-48 h-48 mx-auto" 
                                 />
