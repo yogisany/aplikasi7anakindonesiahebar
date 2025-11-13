@@ -168,31 +168,50 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ user, onLogout }) => {
             const worksheet = workbook.Sheets[sheetName];
             const json: any[] = XLSX.utils.sheet_to_json(worksheet);
 
-            const newTeachers = json.map((row: any) => ({
-                name: String(row.Nama || '').trim(),
-                nip: String(row.NIP || '').trim(),
-                username: String(row.Username || '').trim(),
-                password: String(row.Password || '').trim(),
-                kelas: String(row.Kelas || '').trim(),
-                // FIX: Cast 'teacher' to const to prevent TypeScript from widening the type to `string`,
-                // ensuring it matches the `Role` type ('admin' | 'teacher').
-                role: 'teacher' as const,
-            })).filter(teacher => teacher.name && teacher.username && teacher.password);
+            const validTeachers: (Omit<User, 'id'> & { password?: string })[] = [];
+            const invalidRows: any[] = [];
 
-            if (newTeachers.length === 0) {
-                alert("Tidak ada data guru yang valid ditemukan. Pastikan kolom Nama, Username, dan Password terisi.");
+            json.forEach((row: any) => {
+                const teacher = {
+                    name: String(row.Nama || '').trim(),
+                    nip: String(row.NIP || '').trim(),
+                    username: String(row.Username || '').trim(),
+                    password: String(row.Password || '').trim(),
+                    kelas: String(row.Kelas || '').trim(),
+                    role: 'teacher' as const,
+                };
+
+                if (teacher.name && teacher.username && teacher.password) {
+                    validTeachers.push(teacher);
+                } else {
+                    invalidRows.push(row);
+                }
+            });
+
+            if (validTeachers.length === 0) {
+                alert(`Tidak ada data guru yang valid ditemukan. Pastikan setiap baris memiliki kolom 'Nama', 'Username', dan 'Password' yang terisi.`);
                 return;
             }
             
-            const createdCount = await api.bulkCreateTeachers(newTeachers);
+            const { createdCount, skippedCount } = await api.bulkCreateTeachers(validTeachers);
 
             fetchTeachers();
             
-            if (createdCount > 0) {
-                alert(`${createdCount} dari ${newTeachers.length} data guru berhasil diimpor ke database. Guru dengan username yang sudah ada dilewati.\n\nSEKARANG, Anda harus membuat akun login untuk guru baru di Firebase Authentication Console.`);
-            } else {
-                alert("Tidak ada guru baru yang diimpor. Semua username dalam file mungkin sudah ada.");
+            // Build a comprehensive summary message for the user
+            let summary = `Proses Impor Selesai.\n\n`;
+            summary += `- ${createdCount} guru baru berhasil ditambahkan.\n`;
+            if (skippedCount > 0) {
+                summary += `- ${skippedCount} guru dilewati karena username sudah ada.\n`;
             }
+            if (invalidRows.length > 0) {
+                summary += `- ${invalidRows.length} baris dilewati karena data tidak lengkap (Nama/Username/Password kosong).\n`;
+            }
+            if (createdCount > 0) {
+                summary += `\nPENTING: Sekarang, buat akun login untuk guru baru di Firebase Authentication Console.`
+            }
+
+            alert(summary);
+
         } catch (error) {
             console.error("Error importing file:", error);
             alert("Terjadi kesalahan saat mengimpor file.");

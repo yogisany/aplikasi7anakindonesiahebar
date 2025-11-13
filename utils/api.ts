@@ -50,7 +50,7 @@ export const updateUser = async (userId: string, data: Partial<User>) => {
     await userDocRef.update(data);
 };
 
-export const bulkCreateTeachers = async (teachers: Omit<User, 'id'>[]): Promise<number> => {
+export const bulkCreateTeachers = async (teachers: Omit<User, 'id'>[]): Promise<{ createdCount: number; skippedCount: number; }> => {
     // FIX: Use compat version of batch and collection
     const batch = db.batch();
     const usersCol = db.collection('users');
@@ -61,10 +61,12 @@ export const bulkCreateTeachers = async (teachers: Omit<User, 'id'>[]): Promise<
     const existingUsernames = new Set(querySnapshot.docs.map(doc => doc.data().username));
 
     let createdCount = 0;
+    let skippedCount = 0;
 
     for (const teacher of teachers) {
         if (existingUsernames.has(teacher.username)) {
             console.warn(`Username ${teacher.username} sudah ada. Dilewati.`);
+            skippedCount++;
             continue; // Lewati guru ini
         }
 
@@ -80,7 +82,7 @@ export const bulkCreateTeachers = async (teachers: Omit<User, 'id'>[]): Promise<
         await batch.commit();
     }
     
-    return createdCount;
+    return { createdCount, skippedCount };
 };
 
 
