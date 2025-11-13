@@ -22,7 +22,7 @@ const LoginPage: React.FC<LoginPageProps> = ({ onLogin }) => {
       // Panggil fungsi login tiruan dari mockApi
       const response = await apiRequest('/auth/login', {
         method: 'POST',
-        body: JSON.stringify({ username, password }),
+        body: JSON.stringify({ username: username.trim(), password }),
       });
       onLogin(response.user);
     } catch (err: any) {

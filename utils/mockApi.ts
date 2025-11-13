@@ -1,14 +1,9 @@
 import { User } from '../types';
+import { initialAdmins, initialTeachers } from './initialData';
 
 const API_BASE_URL = '/api'; // This would be your actual backend URL in production.
 
-// Data pengguna untuk otentikasi disimpan langsung di sini untuk keandalan.
-const users: User[] = [
-  { id: 'admin01', username: 'admin', password: 'password', role: 'admin', name: 'Admin Utama' },
-  { id: 'teacher01', username: 'guru1', password: 'password', role: 'teacher', name: 'Budi Hartono', nip: '198001012010011001', kelas: 'Kelas 1A' },
-  { id: 'teacher02', username: 'guru2', password: 'password', role: 'teacher', name: 'Citra Lestari', nip: '198502022012022002', kelas: 'Kelas 1B' },
-];
-
+const users: User[] = [...initialAdmins, ...initialTeachers];
 
 /**
  * A placeholder for making API requests to a real backend.
