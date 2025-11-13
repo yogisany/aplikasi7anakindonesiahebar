@@ -1,9 +1,14 @@
 import { User } from '../types';
-import { initialAdmins, initialTeachers } from './initialData';
 
 const API_BASE_URL = '/api'; // This would be your actual backend URL in production.
 
-const allUsers = [...initialAdmins, ...initialTeachers];
+// Data pengguna untuk otentikasi disimpan langsung di sini untuk keandalan.
+const users: User[] = [
+  { id: 'admin01', username: 'admin', password: 'password', role: 'admin', name: 'Admin Utama' },
+  { id: 'teacher01', username: 'guru1', password: 'password', role: 'teacher', name: 'Budi Hartono', nip: '198001012010011001', kelas: 'Kelas 1A' },
+  { id: 'teacher02', username: 'guru2', password: 'password', role: 'teacher', name: 'Citra Lestari', nip: '198502022012022002', kelas: 'Kelas 1B' },
+];
+
 
 /**
  * A placeholder for making API requests to a real backend.
@@ -27,10 +32,12 @@ export const apiRequest = async (path: string, options: RequestInit = {}): Promi
 
     if (path.startsWith('/auth/login')) {
         const body = JSON.parse(options.body as string);
-        const user = allUsers.find(u => u.username === body.username && u.password === body.password);
+        const user = users.find(u => u.username === body.username && u.password === body.password);
         
         if (user) {
-            return { user };
+            // Return a copy of the user object without the password for security
+            const { password, ...userWithoutPassword } = user;
+            return { user: userWithoutPassword };
         }
         throw new Error('Username atau password salah.');
     }
