@@ -1,14 +1,8 @@
-
 import React, { useState } from 'react';
-import { User } from '../types';
 import Button from '../components/Button';
-import { apiRequest } from '../utils/mockApi';
+import { login } from '../utils/api'; // Import fungsi login baru
 
-interface LoginPageProps {
-  onLogin: (user: User) => void;
-}
-
-const LoginPage: React.FC<LoginPageProps> = ({ onLogin }) => {
+const LoginPage: React.FC = () => {
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
@@ -20,21 +14,18 @@ const LoginPage: React.FC<LoginPageProps> = ({ onLogin }) => {
     setLoading(true);
 
     try {
-      // This now calls the API placeholder, ready for a real backend endpoint
-      const response = await apiRequest('/auth/login', {
-        method: 'POST',
-        body: JSON.stringify({ username, password }),
-      });
-      
-      const user = response.user;
-
-      if (user) {
-        onLogin(user);
-      } else {
-        throw new Error('Username atau password salah.');
-      }
+      // Panggil fungsi login yang berinteraksi dengan Firebase Authentication
+      await login(username, password);
+      // Tidak perlu memanggil onLogin, App.tsx akan merespons secara otomatis
     } catch (err: any) {
-      setError(err.message || 'Terjadi kesalahan saat mencoba login.');
+      let message = 'Terjadi kesalahan saat mencoba login.';
+      // Memberikan pesan error yang lebih user-friendly berdasarkan kode error dari Firebase
+      if (['auth/user-not-found', 'auth/wrong-password', 'auth/invalid-credential'].includes(err.code)) {
+          message = 'Username atau password salah.';
+      } else if (err.code === 'auth/too-many-requests') {
+          message = 'Terlalu banyak percobaan login. Coba lagi nanti.';
+      }
+      setError(message);
     } finally {
       setLoading(false);
     }

@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { User, AdminReport, Message, Attachment } from '../types';
 import Header from '../components/Header';
@@ -10,7 +9,7 @@ import TrashIcon from '../components/icons/TrashIcon';
 import EmojiIcon from '../components/icons/EmojiIcon';
 import AttachmentIcon from '../components/icons/AttachmentIcon';
 import DownloadIcon from '../components/icons/DownloadIcon';
-import { apiRequest } from '../utils/mockApi';
+import * as api from '../utils/api';
 
 // Declare XLSX from global scope
 declare const XLSX: any;
@@ -29,17 +28,9 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ user, onLogout }) => {
   
   // Teacher Management State
   const [teachers, setTeachers] = useState<User[]>([]);
-  const [isTeacherModalOpen, setIsTeacherModalOpen] = useState(false);
-  const [editingTeacher, setEditingTeacher] = useState<User | null>(null);
-  const [teacherFormData, setTeacherFormData] = useState({ id: '', name: '', username: '', password: '', nip: '', kelas: '' });
-  const fileInputRef = useRef<HTMLInputElement>(null);
-
   // Admin Management State
   const [admins, setAdmins] = useState<User[]>([]);
-  const [isAdminModalOpen, setIsAdminModalOpen] = useState(false);
-  const [editingAdmin, setEditingAdmin] = useState<User | null>(null);
-  const [adminFormData, setAdminFormData] = useState({ id: '', name: '', username: '', password: '' });
-
+  
   // State for account settings
   const [accountName, setAccountName] = useState(user.name);
   const [accountUsername, setAccountUsername] = useState(user.username);
@@ -58,15 +49,14 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ user, onLogout }) => {
   const chatContainerRef = useRef<HTMLDivElement>(null);
   const emojiPickerRef = useRef<HTMLDivElement>(null);
   const attachmentInputRef = useRef<HTMLInputElement>(null);
+  const teacherFileInputRef = useRef<HTMLInputElement>(null);
 
-  const isMainAdmin = user.id === 'admin01';
+  const isMainAdmin = user.username === 'admin';
 
   const fetchTeachers = useCallback(async () => {
     try {
-      const data = await apiRequest('/users?role=teacher');
-      if (Array.isArray(data)) {
-        setTeachers(data);
-      }
+      const data = await api.getUsers('teacher');
+      setTeachers(data);
     } catch (error) {
       console.error("Failed to fetch teachers:", error);
       alert("Gagal memuat data guru.");
@@ -75,10 +65,8 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ user, onLogout }) => {
   
   const fetchAdmins = useCallback(async () => {
     try {
-      const data = await apiRequest('/users?role=admin');
-      if (Array.isArray(data)) {
-        setAdmins(data.filter((a: User) => a.id !== user.id)); // Filter out self
-      }
+      const data = await api.getUsers('admin');
+      setAdmins(data.filter((a: User) => a.id !== user.id)); // Filter out self
     } catch (error) {
       console.error("Failed to fetch admins:", error);
       alert("Gagal memuat data admin.");
@@ -87,10 +75,8 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ user, onLogout }) => {
 
   const fetchSubmittedReports = useCallback(async () => {
     try {
-        const data = await apiRequest('/reports');
-        if (Array.isArray(data)) {
-          setSubmittedReports(data.sort((a: AdminReport, b: AdminReport) => new Date(b.submittedAt).getTime() - new Date(a.submittedAt).getTime()));
-        }
+        const data = await api.getReports();
+        setSubmittedReports(data.sort((a, b) => new Date(b.submittedAt).getTime() - new Date(a.submittedAt).getTime()));
     } catch (error) {
       console.error("Failed to fetch reports:", error);
       alert("Gagal memuat laporan.");
@@ -99,17 +85,15 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ user, onLogout }) => {
 
   const fetchMessages = useCallback(async () => {
     try {
-      const allMessages = await apiRequest(`/messages?recipientId=${user.id}`);
-      if (Array.isArray(allMessages)) {
-        setMessages(allMessages);
-        const newUnreadSenders = new Set<string>();
-        allMessages.forEach((msg: Message) => {
-            if (!msg.read && msg.senderId !== user.id) { // Only count received unread messages
-                newUnreadSenders.add(msg.senderId);
-            }
-        });
-        setUnreadSenders(newUnreadSenders);
-      }
+      const allMessages = await api.getMessagesForUser(user.id);
+      setMessages(allMessages);
+      const newUnreadSenders = new Set<string>();
+      allMessages.forEach((msg) => {
+          if (!msg.read && msg.senderId !== user.id) {
+              newUnreadSenders.add(msg.senderId);
+          }
+      });
+      setUnreadSenders(newUnreadSenders);
     } catch (error) {
       console.error("Failed to fetch messages:", error);
     }
@@ -139,10 +123,7 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ user, onLogout }) => {
       if (!selectedRecipientId || selectedRecipientId === 'all_teachers') return;
       if (!unreadSenders.has(selectedRecipientId)) return;
       try {
-        await apiRequest(`/messages/read`, {
-            method: 'POST',
-            body: JSON.stringify({ senderId: selectedRecipientId, recipientId: user.id }),
-        });
+        await api.markMessagesAsRead(selectedRecipientId, user.id);
         fetchMessages(); // Refetch messages to update the unread status
       } catch (error) {
         console.error("Failed to mark messages as read:", error);
@@ -160,62 +141,10 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ user, onLogout }) => {
     document.addEventListener('mousedown', handleClickOutside);
     return () => { document.removeEventListener('mousedown', handleClickOutside); };
   }, []);
-
-  // Teacher Handlers
-  const handleOpenTeacherModal = (teacher: User | null = null) => {
-    if (teacher) {
-      setEditingTeacher(teacher);
-      setTeacherFormData({ id: teacher.id, name: teacher.name, username: teacher.username, password: '', nip: teacher.nip || '', kelas: teacher.kelas || '' });
-    } else {
-      setEditingTeacher(null);
-      setTeacherFormData({ id: '', name: '', username: '', password: '', nip: '', kelas: '' });
-    }
-    setIsTeacherModalOpen(true);
-  };
-  const handleCloseTeacherModal = () => setIsTeacherModalOpen(false);
-  const handleTeacherFormChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const { name, value } = e.target;
-    setTeacherFormData(prev => ({ ...prev, [name]: value }));
-  };
-  const handleTeacherSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    try {
-      if (editingTeacher) {
-        await apiRequest(`/users/${editingTeacher.id}`, {
-          method: 'PUT',
-          body: JSON.stringify(teacherFormData),
-        });
-      } else {
-        await apiRequest('/users', {
-          method: 'POST',
-          body: JSON.stringify({ ...teacherFormData, role: 'teacher' }),
-        });
-      }
-      fetchTeachers();
-      handleCloseTeacherModal();
-    } catch (error: any) {
-      console.error("Failed to save teacher:", error);
-      alert(`Gagal menyimpan data guru: ${error.message}`);
-    }
-  };
-  const handleDeleteTeacher = async (teacherId: string) => {
-    if (window.confirm('Apakah Anda yakin ingin menghapus guru ini? Semua data terkait akan dihapus.')) {
-      try {
-        await apiRequest(`/users/${teacherId}`, { method: 'DELETE' });
-        fetchTeachers();
-        if (selectedRecipientId === teacherId) {
-          setSelectedRecipientId(null);
-        }
-      } catch (error) {
-        console.error("Failed to delete teacher:", error);
-        alert("Gagal menghapus guru.");
-      }
-    }
-  };
-
-  // Excel Handlers for Teachers
+  
+  // Teacher Import Handlers
   const handleDownloadTeacherTemplate = () => {
-    const headers = [['No', 'Nama', 'Username', 'Password', 'NIP', 'Kelas']];
+    const headers = [['Nama', 'NIP', 'Username', 'Password', 'Kelas']];
     const ws = XLSX.utils.aoa_to_sheet(headers);
     const wb = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(wb, ws, 'Format Guru');
@@ -223,9 +152,9 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ user, onLogout }) => {
   };
 
   const handleImportTeacherClick = () => {
-    fileInputRef.current?.click();
+    teacherFileInputRef.current?.click();
   };
-
+  
   const handleTeacherFileImport = (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
     if (!file) return;
@@ -241,11 +170,13 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ user, onLogout }) => {
 
             const newTeachers = json.map((row: any) => ({
                 name: String(row.Nama || '').trim(),
+                nip: String(row.NIP || '').trim(),
                 username: String(row.Username || '').trim(),
                 password: String(row.Password || '').trim(),
-                nip: String(row.NIP || '').trim(),
                 kelas: String(row.Kelas || '').trim(),
-                role: 'teacher',
+                // FIX: Cast 'teacher' to const to prevent TypeScript from widening the type to `string`,
+                // ensuring it matches the `Role` type ('admin' | 'teacher').
+                role: 'teacher' as const,
             })).filter(teacher => teacher.name && teacher.username && teacher.password);
 
             if (newTeachers.length === 0) {
@@ -253,13 +184,15 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ user, onLogout }) => {
                 return;
             }
             
-            await apiRequest('/users/bulk', {
-                method: 'POST',
-                body: JSON.stringify(newTeachers)
-            });
+            const createdCount = await api.bulkCreateTeachers(newTeachers);
 
             fetchTeachers();
-            alert(`${newTeachers.length} guru berhasil diimpor.`);
+            
+            if (createdCount > 0) {
+                alert(`${createdCount} dari ${newTeachers.length} data guru berhasil diimpor ke database. Guru dengan username yang sudah ada dilewati.\n\nSEKARANG, Anda harus membuat akun login untuk guru baru di Firebase Authentication Console.`);
+            } else {
+                alert("Tidak ada guru baru yang diimpor. Semua username dalam file mungkin sudah ada.");
+            }
         } catch (error) {
             console.error("Error importing file:", error);
             alert("Terjadi kesalahan saat mengimpor file.");
@@ -271,55 +204,6 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ user, onLogout }) => {
   };
 
 
-  // Admin Handlers
-  const handleOpenAdminModal = (admin: User | null = null) => {
-    if (admin) {
-        setEditingAdmin(admin);
-        setAdminFormData({ id: admin.id, name: admin.name, username: admin.username, password: '' });
-    } else {
-        setEditingAdmin(null);
-        setAdminFormData({ id: '', name: '', username: '', password: '' });
-    }
-    setIsAdminModalOpen(true);
-  };
-  const handleCloseAdminModal = () => setIsAdminModalOpen(false);
-  const handleAdminFormChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-      const { name, value } = e.target;
-      setAdminFormData(prev => ({ ...prev, [name]: value }));
-  };
-  const handleAdminSubmit = async (e: React.FormEvent) => {
-      e.preventDefault();
-      try {
-        if (editingAdmin) {
-          await apiRequest(`/users/${editingAdmin.id}`, {
-            method: 'PUT',
-            body: JSON.stringify(adminFormData),
-          });
-        } else {
-          await apiRequest('/users', {
-            method: 'POST',
-            body: JSON.stringify({...adminFormData, role: 'admin'}),
-          });
-        }
-        fetchAdmins();
-        handleCloseAdminModal();
-      } catch (error: any) {
-        console.error("Failed to save admin:", error);
-        alert(`Gagal menyimpan data admin: ${error.message}`);
-      }
-  };
-  const handleDeleteAdmin = async (adminId: string) => {
-    if (window.confirm('Apakah Anda yakin ingin menghapus admin ini?')) {
-        try {
-          await apiRequest(`/users/${adminId}`, { method: 'DELETE' });
-          fetchAdmins();
-        } catch (error) {
-          console.error("Failed to delete admin:", error);
-          alert("Gagal menghapus admin.");
-        }
-    }
-  };
-
   // Account Settings Handler
   const handleAccountUpdate = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -328,21 +212,20 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ user, onLogout }) => {
       return;
     }
     try {
-      const payload: any = { name: accountName, username: accountUsername };
+      const payload: Partial<User> = { name: accountName, username: accountUsername };
+      await api.updateUser(user.id, payload);
+
       if (accountPassword) {
-        payload.password = accountPassword;
+        await api.updateUserPassword(accountPassword);
       }
-      await apiRequest(`/users/${user.id}`, {
-        method: 'PUT',
-        body: JSON.stringify(payload)
-      });
+      
       alert('Informasi akun berhasil diperbarui. Anda mungkin perlu login kembali untuk melihat perubahan.');
-       // Update user in localStorage to reflect changes immediately
+       // Update user in current session state
       const updatedUser = { ...user, name: accountName, username: accountUsername };
-      localStorage.setItem('currentUser', JSON.stringify(updatedUser));
-    } catch (error) {
+      // The onAuthStateChanged will handle the rest
+    } catch (error: any) {
       console.error("Failed to update account:", error);
-      alert("Gagal memperbarui akun.");
+      alert(`Gagal memperbarui akun. ${error.message}`);
     }
   };
 
@@ -365,17 +248,14 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ user, onLogout }) => {
     }
 
     try {
-        const messagePayload = {
+        const messagePayload: Omit<Message, 'id' | 'timestamp' | 'read'> = {
             senderId: user.id,
             senderName: user.name,
             recipientId: selectedRecipientId,
             content: newMessage,
             attachment: attachment || undefined,
         };
-        await apiRequest('/messages', {
-            method: 'POST',
-            body: JSON.stringify(messagePayload),
-        });
+        await api.sendMessage(messagePayload);
         
         fetchMessages();
         setNewMessage('');
@@ -390,7 +270,7 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ user, onLogout }) => {
   const handleDeleteMessage = async (messageId: string) => {
     if (window.confirm('Apakah Anda yakin ingin menghapus pesan ini?')) {
         try {
-            await apiRequest(`/messages/${messageId}`, { method: 'DELETE' });
+            await api.deleteMessage(messageId);
             fetchMessages();
         } catch (error) {
             console.error("Failed to delete message:", error);
@@ -430,7 +310,7 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ user, onLogout }) => {
   const getFilteredMessages = () => {
     if (!selectedRecipientId) return [];
     if (selectedRecipientId === 'all_teachers') {
-      return messages.filter(m => m.recipientId === 'all_teachers');
+      return messages.filter(m => m.recipientId === 'all_teachers' && m.senderId === user.id);
     }
     return messages.filter(m => 
         (m.senderId === user.id && m.recipientId === selectedRecipientId) ||
@@ -469,28 +349,25 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ user, onLogout }) => {
                     <div className="flex gap-2 flex-wrap">
                         <Button onClick={handleDownloadTeacherTemplate} variant="secondary">Unduh Format</Button>
                         <Button onClick={handleImportTeacherClick} variant="secondary">Import Excel</Button>
-                        <Button onClick={() => handleOpenTeacherModal()}><PlusIcon /><span>Tambah Guru</span></Button>
                     </div>
                   </div>
-                   <p className="text-sm text-gray-500 mb-4">
-                      Untuk import, siapkan file Excel dengan kolom header: <strong>No</strong>, <strong>Nama</strong>, <strong>Username</strong>, <strong>Password</strong>, <strong>NIP</strong>, <strong>Kelas</strong>. Kolom <strong>Nama</strong>, <strong>Username</strong> dan <strong>Password</strong> wajib diisi.
-                  </p>
-                  <input type="file" ref={fileInputRef} onChange={handleTeacherFileImport} className="hidden" accept=".xlsx, .xls"/>
+                  <input type="file" ref={teacherFileInputRef} onChange={handleTeacherFileImport} className="hidden" accept=".xlsx, .xls"/>
+                   <p className="text-sm text-gray-500 mb-4 p-3 bg-yellow-100 border border-yellow-300 rounded-md">
+                      <strong>Penting:</strong> Proses impor data guru terdiri dari 2 langkah:<br/>
+                      1. Gunakan tombol "Import Excel" untuk mengunggah data profil guru ke database.<br/>
+                      2. Setelah itu, Anda <strong>wajib</strong> membuat akun login untuk setiap guru secara manual di <a href="https://console.firebase.google.com/" target="_blank" rel="noopener noreferrer" className="underline text-primary-600">Firebase Authentication Console</a>. Gunakan <strong>Username</strong> dari file Excel sebagai <strong>email</strong> (misal: 'guru1' menjadi 'guru1@example.com') dan <strong>Password</strong> yang sama.
+                   </p>
                   <div className="overflow-x-auto">
                     <table className="w-full text-left">
                       <thead className="bg-primary-100">
                         <tr>
-                          <th className="p-3">No.</th><th className="p-3">Nama</th><th className="p-3">NIP</th><th className="p-3">Username</th><th className="p-3">Kelas</th><th className="p-3">Aksi</th>
+                          <th className="p-3">No.</th><th className="p-3">Nama</th><th className="p-3">NIP</th><th className="p-3">Username</th><th className="p-3">Kelas</th>
                         </tr>
                       </thead>
                       <tbody>
                         {teachers.map((t, index) => (
                           <tr key={t.id} className="border-b hover:bg-gray-50">
                             <td className="p-3">{index + 1}</td><td className="p-3">{t.name}</td><td className="p-3">{t.nip}</td><td className="p-3">{t.username}</td><td className="p-3">{t.kelas}</td>
-                            <td className="p-3 flex gap-2">
-                              <button onClick={() => handleOpenTeacherModal(t)} className="text-primary-600 hover:text-primary-800"><EditIcon /></button>
-                              <button onClick={() => handleDeleteTeacher(t.id)} className="text-red-600 hover:text-red-800"><TrashIcon /></button>
-                            </td>
                           </tr>
                         ))}
                       </tbody>
@@ -503,23 +380,21 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ user, onLogout }) => {
                 <div>
                   <div className="flex justify-between items-center mb-4">
                     <h2 className="text-xl font-semibold text-primary-700">Data Admin</h2>
-                    <Button onClick={() => handleOpenAdminModal()}><PlusIcon /><span>Tambah Admin</span></Button>
                   </div>
+                  <p className="text-sm text-gray-500 mb-4 p-3 bg-yellow-100 border border-yellow-300 rounded-md">
+                      <strong>Catatan:</strong> Manajemen admin (menambah, mengedit, atau menghapus) harus dilakukan langsung dari <a href="https://console.firebase.google.com/" target="_blank" rel="noopener noreferrer" className="underline text-primary-600">Firebase Console</a>.
+                   </p>
                   <div className="overflow-x-auto">
                     <table className="w-full text-left">
                       <thead className="bg-primary-100">
                         <tr>
-                          <th className="p-3">No.</th><th className="p-3">Nama</th><th className="p-3">Username</th><th className="p-3">Aksi</th>
+                          <th className="p-3">No.</th><th className="p-3">Nama</th><th className="p-3">Username</th>
                         </tr>
                       </thead>
                       <tbody>
                         {admins.map((a, index) => (
                           <tr key={a.id} className="border-b hover:bg-gray-50">
                             <td className="p-3">{index + 1}</td><td className="p-3">{a.name}</td><td className="p-3">{a.username}</td>
-                            <td className="p-3 flex gap-2">
-                              <button onClick={() => handleOpenAdminModal(a)} className="text-primary-600 hover:text-primary-800"><EditIcon /></button>
-                              <button onClick={() => handleDeleteAdmin(a.id)} className="text-red-600 hover:text-red-800" disabled={a.id === user.id}><TrashIcon /></button>
-                            </td>
                           </tr>
                         ))}
                       </tbody>
@@ -653,7 +528,7 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ user, onLogout }) => {
                   <form onSubmit={handleAccountUpdate} className="space-y-4 p-4 border rounded-lg bg-primary-50">
                       <div><label className="block text-sm font-medium">Nama</label><input type="text" value={accountName} onChange={e => setAccountName(e.target.value)} required className="mt-1 w-full p-2 border rounded-md"/></div>
                       <div><label className="block text-sm font-medium">Username</label><input type="text" value={accountUsername} onChange={e => setAccountUsername(e.target.value)} required className="mt-1 w-full p-2 border rounded-md"/></div>
-                      <div><label className="block text-sm font-medium">Password Baru (opsional)</label><input type="password" value={accountPassword} onChange={e => setAccountPassword(e.target.value)} className="mt-1 w-full p-2 border rounded-md"/></div>
+                      <div><label className="block text-sm font-medium">Password Baru (opsional)</label><input type="password" value={accountPassword} onChange={e => setAccountPassword(e.target.value)} className="mt-1 w-full p-2 border rounded-md" placeholder="Kosongkan jika tidak ingin diubah"/></div>
                       <div><label className="block text-sm font-medium">Konfirmasi Password Baru</label><input type="password" value={accountConfirmPassword} onChange={e => setAccountConfirmPassword(e.target.value)} className="mt-1 w-full p-2 border rounded-md"/></div>
                       <div className="text-right"><Button type="submit">Simpan Perubahan</Button></div>
                   </form>
@@ -676,26 +551,6 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ user, onLogout }) => {
             </div>
         </div>
       </main>
-
-      <Modal isOpen={isTeacherModalOpen} onClose={handleCloseTeacherModal} title={editingTeacher ? 'Edit Guru' : 'Tambah Guru'}>
-        <form onSubmit={handleTeacherSubmit} className="space-y-4">
-          <div><label className="block text-sm font-medium">Nama</label><input type="text" name="name" value={teacherFormData.name} onChange={handleTeacherFormChange} required className="mt-1 w-full p-2 border rounded-md"/></div>
-          <div><label className="block text-sm font-medium">Username</label><input type="text" name="username" value={teacherFormData.username} onChange={handleTeacherFormChange} required className="mt-1 w-full p-2 border rounded-md"/></div>
-          <div><label className="block text-sm font-medium">Password {editingTeacher ? '(Kosongkan jika tidak diubah)' : ''}</label><input type="password" name="password" value={teacherFormData.password} onChange={handleTeacherFormChange} required={!editingTeacher} className="mt-1 w-full p-2 border rounded-md"/></div>
-          <div><label className="block text-sm font-medium">NIP</label><input type="text" name="nip" value={teacherFormData.nip} onChange={handleTeacherFormChange} className="mt-1 w-full p-2 border rounded-md"/></div>
-          <div><label className="block text-sm font-medium">Kelas</label><input type="text" name="kelas" value={teacherFormData.kelas} onChange={handleTeacherFormChange} className="mt-1 w-full p-2 border rounded-md"/></div>
-          <div className="flex justify-end gap-2 pt-4"><Button type="button" variant="secondary" onClick={handleCloseTeacherModal}>Batal</Button><Button type="submit">Simpan</Button></div>
-        </form>
-      </Modal>
-
-       <Modal isOpen={isAdminModalOpen} onClose={handleCloseAdminModal} title={editingAdmin ? 'Edit Admin' : 'Tambah Admin'}>
-        <form onSubmit={handleAdminSubmit} className="space-y-4">
-          <div><label className="block text-sm font-medium">Nama</label><input type="text" name="name" value={adminFormData.name} onChange={handleAdminFormChange} required className="mt-1 w-full p-2 border rounded-md"/></div>
-          <div><label className="block text-sm font-medium">Username</label><input type="text" name="username" value={adminFormData.username} onChange={handleAdminFormChange} required className="mt-1 w-full p-2 border rounded-md"/></div>
-          <div><label className="block text-sm font-medium">Password {editingAdmin ? '(Kosongkan jika tidak diubah)' : ''}</label><input type="password" name="password" value={adminFormData.password} onChange={handleAdminFormChange} required={!editingAdmin} className="mt-1 w-full p-2 border rounded-md"/></div>
-          <div className="flex justify-end gap-2 pt-4"><Button type="button" variant="secondary" onClick={handleCloseAdminModal}>Batal</Button><Button type="submit">Simpan</Button></div>
-        </form>
-      </Modal>
     </>
   );
 };

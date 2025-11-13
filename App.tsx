@@ -1,36 +1,54 @@
-
 import React, { useState, useEffect, useCallback } from 'react';
 import LoginPage from './pages/LoginPage';
 import AdminDashboard from './pages/AdminDashboard';
 import TeacherDashboard from './pages/TeacherDashboard';
 import { User } from './types';
+import { auth, db } from './utils/firebase';
 
 const App: React.FC = () => {
   const [currentUser, setCurrentUser] = useState<User | null>(null);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    // Check for logged in user in local storage for persistence across tabs/browsers
-    try {
-      const loggedInUser = localStorage.getItem('currentUser');
-      if (loggedInUser) {
-        setCurrentUser(JSON.parse(loggedInUser));
+    // FIX: Changed to v8 compat syntax `auth.onAuthStateChanged` to resolve module export error.
+    const unsubscribe = auth.onAuthStateChanged(async (userAuth) => {
+      if (userAuth) {
+        // Pengguna login, ambil data profil dari Firestore
+        try {
+          // FIX: Changed Firestore call to v8 compat syntax.
+          const userDocRef = db.collection('users').doc(userAuth.uid);
+          const userDoc = await userDocRef.get();
+          if (userDoc.exists) {
+            const userData = userDoc.data() as Omit<User, 'id'>;
+            setCurrentUser({ id: userAuth.uid, ...userData });
+          } else {
+            console.error("Profil pengguna tidak ditemukan di Firestore. Sesi logout dimulai.");
+            await auth.signOut();
+            setCurrentUser(null);
+          }
+        } catch (error) {
+           console.error("Gagal mengambil profil pengguna:", error);
+           await auth.signOut();
+           setCurrentUser(null);
+        }
+      } else {
+        // Pengguna logout
+        setCurrentUser(null);
       }
+      setLoading(false);
+    });
+
+    // Cleanup subscription on unmount
+    return () => unsubscribe();
+  }, []);
+
+  const handleLogout = useCallback(async () => {
+    try {
+      await auth.signOut();
+      setCurrentUser(null);
     } catch (error) {
-      console.error("Failed to parse user from localStorage", error);
-      localStorage.removeItem('currentUser');
+      console.error("Gagal saat logout:", error);
     }
-    setLoading(false);
-  }, []);
-
-  const handleLogin = useCallback((user: User) => {
-    setCurrentUser(user);
-    localStorage.setItem('currentUser', JSON.stringify(user));
-  }, []);
-
-  const handleLogout = useCallback(() => {
-    setCurrentUser(null);
-    localStorage.removeItem('currentUser');
   }, []);
 
   if (loading) {
@@ -42,7 +60,7 @@ const App: React.FC = () => {
   }
 
   if (!currentUser) {
-    return <LoginPage onLogin={handleLogin} />;
+    return <LoginPage />;
   }
 
   return (
