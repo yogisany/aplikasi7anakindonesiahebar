@@ -11,7 +11,8 @@ import EmojiIcon from '../components/icons/EmojiIcon';
 import AttachmentIcon from '../components/icons/AttachmentIcon';
 import DownloadIcon from '../components/icons/DownloadIcon';
 import { HABIT_NAMES, RATING_OPTIONS } from '../constants';
-import * as api from '../utils/api';
+import { apiRequest } from '../utils/mockApi';
+import { initialStudents, initialHabitRecords, initialMessages, initialAdmins } from '../utils/initialData';
 
 // Declare XLSX from global scope
 declare const XLSX: any;
@@ -45,7 +46,7 @@ const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ user, onLogout }) =
   const [activeTab, setActiveTab] = useState('students');
   
   // Student State
-  const [students, setStudents] = useState<Student[]>([]);
+  const [students, setStudents] = useState<Student[]>(initialStudents.filter(s => s.teacherId === user.id));
   const [isStudentModalOpen, setIsStudentModalOpen] = useState(false);
   const [editingStudent, setEditingStudent] = useState<Student | null>(null);
   const [studentFormData, setStudentFormData] = useState({ id: '', name: '', nisn: '', class: '' });
@@ -54,7 +55,7 @@ const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ user, onLogout }) =
 
 
   // Habit State
-  const [records, setRecords] = useState<HabitRecord[]>([]);
+  const [records, setRecords] = useState<HabitRecord[]>(initialHabitRecords.filter(r => students.some(s => s.id === r.studentId)));
   const [selectedStudentId, setSelectedStudentId] = useState<string>('');
   const [selectedDate, setSelectedDate] = useState<string>(new Date().toISOString().split('T')[0]);
   const [habitData, setHabitData] = useState<Record<Habit, Rating>>(() => {
@@ -69,10 +70,10 @@ const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ user, onLogout }) =
   const [reportMetadata, setReportMetadata] = useState<ReportMetadata | null>(null);
 
   // Messaging State
-  const [messages, setMessages] = useState<Message[]>([]);
+  const [messages, setMessages] = useState<Message[]>(initialMessages);
   const [newMessage, setNewMessage] = useState('');
   const [attachment, setAttachment] = useState<Attachment | null>(null);
-  const [adminUser, setAdminUser] = useState<User | null>(null);
+  const [adminUser, setAdminUser] = useState<User | null>(initialAdmins.find(a => a.username === 'admin') || initialAdmins[0] || null);
   const [hasUnreadMessages, setHasUnreadMessages] = useState(false);
   const [showEmojiPicker, setShowEmojiPicker] = useState(false);
   const chatContainerRef = useRef<HTMLDivElement>(null);
@@ -80,55 +81,15 @@ const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ user, onLogout }) =
   const attachmentInputRef = useRef<HTMLInputElement>(null);
 
   const fileInputRef = useRef<HTMLInputElement>(null);
-
-  const fetchStudents = useCallback(async () => {
-    try {
-      const data = await api.getStudents(user.id);
-      data.sort((a, b) => a.name.localeCompare(b.name, 'id-ID', { numeric: true, sensitivity: 'base' }));
-      setStudents(data);
-    } catch (error) {
-        console.error("Failed to fetch students:", error);
-        alert("Gagal memuat data siswa.");
-    }
-  }, [user.id]);
   
-  const fetchRecords = useCallback(async () => {
-    try {
-        const data = await api.getHabitRecordsForTeacher(user.id);
-        setRecords(data);
-    } catch (error) {
-        console.error("Failed to fetch habit records:", error);
-        alert("Gagal memuat data kebiasaan.");
-    }
-  }, [user.id]);
-
-  const fetchMessages = useCallback(async () => {
-    try {
-        const data = await api.getMessagesForUser(user.id);
-        setMessages(data);
-        const hasUnread = data.some((msg) => !msg.read && msg.senderId !== user.id);
-        setHasUnreadMessages(hasUnread);
-    } catch (error) {
-        console.error("Failed to fetch messages:", error);
-    }
-  }, [user.id]);
-
-  const fetchAdminUser = useCallback(async () => {
-    try {
-        const admins = await api.getUsers('admin');
-        const mainAdmin = admins.find(a => a.username === 'admin') || admins[0];
-        setAdminUser(mainAdmin || null);
-    } catch (error) {
-        console.error("Failed to fetch admin user:", error);
-    }
-  }, []);
+  const fetchMessages = useCallback(() => {
+    const hasUnread = messages.some((msg) => !msg.read && msg.senderId !== user.id);
+    setHasUnreadMessages(hasUnread);
+  }, [messages, user.id]);
 
   useEffect(() => {
-    fetchStudents();
-    fetchRecords();
     fetchMessages();
-    fetchAdminUser();
-  }, [fetchStudents, fetchRecords, fetchMessages, fetchAdminUser]);
+  }, [fetchMessages]);
 
   useEffect(() => {
       const record = records.find(r => r.studentId === selectedStudentId && r.date === selectedDate);
@@ -161,14 +122,10 @@ const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ user, onLogout }) =
 
   const handleTabClick = async (tabName: string) => {
     if (tabName === 'messages' && hasUnreadMessages) {
-      if (adminUser) {
-        try {
-          await api.markMessagesAsRead(adminUser.id, user.id);
-          fetchMessages();
-        } catch (error) {
-          console.error("Failed to mark messages as read", error);
-        }
-      }
+        setMessages(prev => prev.map(msg => 
+            (msg.senderId !== user.id) ? { ...msg, read: true } : msg
+        ));
+        fetchMessages();
     }
     setActiveTab(tabName);
   };
@@ -194,13 +151,14 @@ const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ user, onLogout }) =
   const handleStudentSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     try {
-        const studentData = { ...studentFormData, teacherId: user.id };
         if (editingStudent) {
-            await api.updateStudent(editingStudent.id, studentData);
+            await apiRequest(`/students/${editingStudent.id}`, { method: 'PUT', body: JSON.stringify(studentFormData) });
+            setStudents(prev => prev.map(s => s.id === editingStudent.id ? { ...s, ...studentFormData } : s));
         } else {
-            await api.createStudent(studentData);
+            const newStudent = { ...studentFormData, id: `student_${Date.now()}`, teacherId: user.id };
+            await apiRequest('/students', { method: 'POST', body: JSON.stringify(newStudent) });
+            setStudents(prev => [...prev, newStudent].sort((a, b) => a.name.localeCompare(b.name)));
         }
-        fetchStudents();
         handleCloseStudentModal();
     } catch (error) {
         console.error("Failed to save student", error);
@@ -211,9 +169,9 @@ const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ user, onLogout }) =
   const handleStudentDelete = async (studentId: string) => {
     if (window.confirm('Yakin hapus siswa? Ini akan menghapus semua data kebiasaannya.')) {
         try {
-            await api.deleteStudent(studentId);
-            fetchStudents();
-            fetchRecords();
+            await apiRequest(`/students/${studentId}`, { method: 'DELETE' });
+            setStudents(prev => prev.filter(s => s.id !== studentId));
+            setRecords(prev => prev.filter(r => r.studentId !== studentId));
         } catch (error) {
             console.error("Failed to delete student", error);
             alert("Gagal menghapus siswa.");
@@ -251,9 +209,12 @@ const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ user, onLogout }) =
 
       if (window.confirm(`Yakin ingin menghapus ${selectedStudents.size} siswa? Tindakan ini tidak dapat dibatalkan.`)) {
           try {
-              await api.bulkDeleteStudents(Array.from(selectedStudents));
-              fetchStudents();
-              fetchRecords();
+              const idsToDelete = Array.from(selectedStudents);
+              await apiRequest('/students/bulk-delete', { method: 'POST', body: JSON.stringify({ ids: idsToDelete }) });
+              
+              setStudents(prev => prev.filter(s => !idsToDelete.includes(s.id)));
+              setRecords(prev => prev.filter(r => !idsToDelete.includes(r.studentId)));
+              
               alert(`${selectedStudents.size} siswa berhasil dihapus.`);
               setIsBulkDeleteMode(false);
               setSelectedStudents(new Set());
@@ -296,6 +257,7 @@ const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ user, onLogout }) =
             }
 
             const newStudents = json.map((row: any) => ({
+                id: `student_${Date.now()}_${Math.random()}`,
                 name: String(row.Nama || '').trim(),
                 nisn: String(row.NISN || '').trim(),
                 class: String(row.Kelas || '').trim() || user.kelas || '',
@@ -307,9 +269,9 @@ const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ user, onLogout }) =
                 return;
             }
             
-            await api.bulkCreateStudents(newStudents);
+            await apiRequest('/students/bulk-create', { method: 'POST', body: JSON.stringify(newStudents) });
 
-            fetchStudents();
+            setStudents(prev => [...prev, ...newStudents].sort((a,b) => a.name.localeCompare(b.name)));
             alert(`${newStudents.length} siswa berhasil diimpor.`);
         } catch (error) {
             console.error("Error importing file:", error);
@@ -333,14 +295,24 @@ const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ user, onLogout }) =
           return;
       }
       try {
-          const habitPayload = {
-              studentId: selectedStudentId,
-              date: selectedDate,
-              habits: habitData,
-              teacherId: user.id,
-          };
-          await api.saveHabitRecord(habitPayload);
-          fetchRecords();
+          const existingRecordIndex = records.findIndex(r => r.studentId === selectedStudentId && r.date === selectedDate);
+          
+          if (existingRecordIndex > -1) {
+              // Update existing record
+              const updatedRecord = { ...records[existingRecordIndex], habits: habitData };
+              await apiRequest(`/habits/${updatedRecord.id}`, { method: 'PUT', body: JSON.stringify(updatedRecord) });
+              setRecords(prev => prev.map((r, i) => i === existingRecordIndex ? updatedRecord : r));
+          } else {
+              // Create new record
+              const newRecord: HabitRecord = {
+                  id: `record_${Date.now()}`,
+                  studentId: selectedStudentId,
+                  date: selectedDate,
+                  habits: habitData,
+              };
+              await apiRequest('/habits', { method: 'POST', body: JSON.stringify(newRecord) });
+              setRecords(prev => [...prev, newRecord]);
+          }
           alert("Data kebiasaan berhasil disimpan!");
       } catch (error) {
           console.error("Failed to save habit data:", error);
@@ -365,7 +337,6 @@ const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ user, onLogout }) =
       const recordsByDate: Record<string, Record<string, HabitRecord>> = {};
       recordsForMonth.forEach(record => {
           if (!recordsByDate[record.date]) recordsByDate[record.date] = {};
-          // FIX: The variable 'student' is not defined here; it should be 'record.studentId'.
           recordsByDate[record.date][record.studentId] = record;
       });
 
@@ -438,30 +409,9 @@ const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ user, onLogout }) =
           alert("Tidak ada data laporan untuk dikirim.");
           return;
       }
-      const { className, monthName, year } = reportMetadata;
-      const sheetData: any[][] = [];
-      sheetData.push(['Laporan Rekapitulasi Pemantauan Kebiasaan Siswa']);
-      sheetData.push([`Bulan: ${monthName} ${year}`]);
-      sheetData.push([`Kelas: ${className}`, '', `Guru: ${user.name}`]);
-      sheetData.push([]);
-      monthlyReportData.forEach(dailyData => {
-          if (dailyData.studentRecords.length > 0) {
-              sheetData.push([`TANGGAL ${dailyData.day}`]);
-              sheetData.push(['No', 'Nama Peserta Didik', ...HABIT_NAMES]);
-              dailyData.studentRecords.forEach((record, index) => {
-                  sheetData.push([ index + 1, record.studentName, ...HABIT_NAMES.map(habit => record.habits[habit]) ]);
-              });
-              sheetData.push([]); 
-          }
-      });
-
       try {
-          const reportPayload = {
-              teacherId: user.id, teacherName: user.name, className, monthName, year,
-              reportData: sheetData,
-          };
-          await api.sendReportToAdmin(reportPayload);
-          alert(`Laporan untuk ${monthName} ${year} berhasil dikirim ke admin.`);
+          await apiRequest('/reports', { method: 'POST', body: JSON.stringify({ metadata: reportMetadata }) });
+          alert(`Laporan untuk ${reportMetadata.monthName} ${reportMetadata.year} berhasil dikirim ke admin (simulasi).`);
       } catch (error) {
           console.error("Failed to send report", error);
           alert("Gagal mengirim laporan.");
@@ -474,13 +424,14 @@ const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ user, onLogout }) =
     if (!adminUser) return;
 
     try {
-        const messagePayload: Omit<Message, 'id' | 'timestamp' | 'read'> = {
+        const messagePayload: Message = {
+            id: `msg_${Date.now()}`,
             senderId: user.id, senderName: user.name, recipientId: adminUser.id,
             content: newMessage, attachment: attachment || undefined,
+            timestamp: new Date().toISOString(), read: false,
         };
-        await api.sendMessage(messagePayload);
-        
-        fetchMessages();
+        await apiRequest('/messages', { method: 'POST', body: JSON.stringify(messagePayload) });
+        setMessages(prev => [...prev, messagePayload]);
         setNewMessage('');
         setAttachment(null);
         setShowEmojiPicker(false);
@@ -493,8 +444,8 @@ const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ user, onLogout }) =
   const handleDeleteMessage = async (messageId: string) => {
     if (window.confirm('Apakah Anda yakin ingin menghapus pesan ini?')) {
         try {
-            await api.deleteMessage(messageId);
-            fetchMessages();
+            await apiRequest(`/messages/${messageId}`, { method: 'DELETE' });
+            setMessages(prev => prev.filter(m => m.id !== messageId));
         } catch (error) {
             console.error("Failed to delete message:", error);
             alert("Gagal menghapus pesan.");

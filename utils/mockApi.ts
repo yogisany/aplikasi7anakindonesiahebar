@@ -1,7 +1,9 @@
-
 import { User } from '../types';
+import { initialAdmins, initialTeachers } from './initialData';
 
 const API_BASE_URL = '/api'; // This would be your actual backend URL in production.
+
+const allUsers = [...initialAdmins, ...initialTeachers];
 
 /**
  * A placeholder for making API requests to a real backend.
@@ -22,20 +24,13 @@ export const apiRequest = async (path: string, options: RequestInit = {}): Promi
     // --- MOCK BEHAVIOR FOR DEMONSTRATION ---
     // This section simulates a backend response. In a real application,
     // this would be replaced by an actual `fetch` call to your server.
-    // It returns minimal data to allow UI navigation but does not persist anything.
 
     if (path.startsWith('/auth/login')) {
         const body = JSON.parse(options.body as string);
-        // Mock login allows navigating the app as 'admin' or 'guru1' for demo purposes.
-        if (body.username === 'admin' && body.password === 'password') {
-            return {
-                user: { id: 'admin01', name: 'Admin Utama', username: 'admin', role: 'admin' } as User
-            };
-        }
-        if (body.username === 'guru1' && body.password === 'password') {
-            return {
-                user: { id: 'teacher01', name: 'Budi Hartono', username: 'guru1', role: 'teacher', kelas: 'Kelas 1A' } as User
-            };
+        const user = allUsers.find(u => u.username === body.username && u.password === body.password);
+        
+        if (user) {
+            return { user };
         }
         throw new Error('Username atau password salah.');
     }
@@ -43,10 +38,11 @@ export const apiRequest = async (path: string, options: RequestInit = {}): Promi
     // For any GET request, return an empty array to prevent UI crashes on functions like .map().
     // The UI will appear empty, which is the expected behavior without a real backend.
     if (options.method === 'GET' || !options.method) {
+        // This is a generic response. Specific data should be handled by local state.
         return [];
     }
 
     // For any data modification requests (POST, PUT, DELETE), return a generic success response.
-    // The data is not actually saved anywhere.
+    // The data is not actually saved anywhere persistently.
     return { success: true, message: 'Operasi berhasil (respon tiruan).' };
 };

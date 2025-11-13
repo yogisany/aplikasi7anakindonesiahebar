@@ -9,7 +9,9 @@ import TrashIcon from '../components/icons/TrashIcon';
 import EmojiIcon from '../components/icons/EmojiIcon';
 import AttachmentIcon from '../components/icons/AttachmentIcon';
 import DownloadIcon from '../components/icons/DownloadIcon';
-import * as api from '../utils/api';
+import { apiRequest } from '../utils/mockApi';
+import { initialAdmins, initialTeachers, initialReports, initialMessages } from '../utils/initialData';
+
 
 // Declare XLSX from global scope
 declare const XLSX: any;
@@ -27,9 +29,9 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ user, onLogout }) => {
   const [activeTab, setActiveTab] = useState('teachers');
   
   // Teacher Management State
-  const [teachers, setTeachers] = useState<User[]>([]);
+  const [teachers, setTeachers] = useState<User[]>(initialTeachers);
   // Admin Management State
-  const [admins, setAdmins] = useState<User[]>([]);
+  const [admins, setAdmins] = useState<User[]>(initialAdmins.filter(a => a.id !== user.id));
   
   // State for account settings
   const [accountName, setAccountName] = useState(user.name);
@@ -37,10 +39,10 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ user, onLogout }) => {
   const [accountPassword, setAccountPassword] = useState('');
   const [accountConfirmPassword, setAccountConfirmPassword] = useState('');
   
-  const [submittedReports, setSubmittedReports] = useState<AdminReport[]>([]);
+  const [submittedReports, setSubmittedReports] = useState<AdminReport[]>(initialReports);
 
   // State for messaging
-  const [messages, setMessages] = useState<Message[]>([]);
+  const [messages, setMessages] = useState<Message[]>(initialMessages);
   const [selectedRecipientId, setSelectedRecipientId] = useState<string | null>(null);
   const [newMessage, setNewMessage] = useState('');
   const [attachment, setAttachment] = useState<Attachment | null>(null);
@@ -52,59 +54,25 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ user, onLogout }) => {
   const teacherFileInputRef = useRef<HTMLInputElement>(null);
 
   const isMainAdmin = user.username === 'admin';
-
-  const fetchTeachers = useCallback(async () => {
-    try {
-      const data = await api.getUsers('teacher');
-      setTeachers(data);
-    } catch (error) {
-      console.error("Failed to fetch teachers:", error);
-      alert("Gagal memuat data guru.");
-    }
-  }, []);
   
-  const fetchAdmins = useCallback(async () => {
-    try {
-      const data = await api.getUsers('admin');
-      setAdmins(data.filter((a: User) => a.id !== user.id)); // Filter out self
-    } catch (error) {
-      console.error("Failed to fetch admins:", error);
-      alert("Gagal memuat data admin.");
-    }
-  }, [user.id]);
-
-  const fetchSubmittedReports = useCallback(async () => {
-    try {
-        const data = await api.getReports();
-        setSubmittedReports(data.sort((a, b) => new Date(b.submittedAt).getTime() - new Date(a.submittedAt).getTime()));
-    } catch (error) {
-      console.error("Failed to fetch reports:", error);
-      alert("Gagal memuat laporan.");
-    }
-  }, []);
-
-  const fetchMessages = useCallback(async () => {
-    try {
-      const allMessages = await api.getMessagesForUser(user.id);
-      setMessages(allMessages);
-      const newUnreadSenders = new Set<string>();
-      allMessages.forEach((msg) => {
+  // In a browser-only version, we don't fetch data, it's already in the state.
+  // These functions are kept for structural similarity but are now empty.
+  const fetchTeachers = useCallback(() => {}, []);
+  const fetchAdmins = useCallback(() => {}, []);
+  const fetchSubmittedReports = useCallback(() => {}, []);
+  const fetchMessages = useCallback(() => {
+     const newUnreadSenders = new Set<string>();
+      messages.forEach((msg) => {
           if (!msg.read && msg.senderId !== user.id) {
               newUnreadSenders.add(msg.senderId);
           }
       });
       setUnreadSenders(newUnreadSenders);
-    } catch (error) {
-      console.error("Failed to fetch messages:", error);
-    }
-  }, [user.id]);
+  }, [messages, user.id]);
 
   useEffect(() => {
-    fetchTeachers();
-    if (isMainAdmin) fetchAdmins();
-    fetchSubmittedReports();
     fetchMessages();
-  }, [fetchTeachers, fetchAdmins, fetchSubmittedReports, fetchMessages, isMainAdmin]);
+  }, [fetchMessages]);
 
   useEffect(() => {
     if (!isMainAdmin && activeTab === 'admins') {
@@ -119,17 +87,16 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ user, onLogout }) => {
   }, [messages, selectedRecipientId]);
   
   useEffect(() => {
-    const markMessagesAsRead = async () => {
-      if (!selectedRecipientId || selectedRecipientId === 'all_teachers') return;
-      if (!unreadSenders.has(selectedRecipientId)) return;
-      try {
-        await api.markMessagesAsRead(selectedRecipientId, user.id);
-        fetchMessages(); // Refetch messages to update the unread status
-      } catch (error) {
-        console.error("Failed to mark messages as read:", error);
-      }
-    };
-    markMessagesAsRead();
+    if (!selectedRecipientId || selectedRecipientId === 'all_teachers') return;
+    if (!unreadSenders.has(selectedRecipientId)) return;
+    
+    // Simulate marking as read
+    setMessages(prev => prev.map(msg => 
+        (msg.senderId === selectedRecipientId && msg.recipientId === user.id) 
+        ? { ...msg, read: true } 
+        : msg
+    ));
+    fetchMessages(); // Recalculate unread senders
   }, [selectedRecipientId, user.id, fetchMessages, unreadSenders]);
 
   useEffect(() => {
@@ -168,11 +135,16 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ user, onLogout }) => {
             const worksheet = workbook.Sheets[sheetName];
             const json: any[] = XLSX.utils.sheet_to_json(worksheet);
 
-            const validTeachers: (Omit<User, 'id'> & { password?: string })[] = [];
-            const invalidRows: any[] = [];
+            let createdCount = 0;
+            let skippedCount = 0;
+            let invalidCount = 0;
+
+            const newTeachers = [...teachers];
+            const existingUsernames = new Set(newTeachers.map(t => t.username));
 
             json.forEach((row: any) => {
                 const teacher = {
+                    id: `teacher_${Date.now()}_${Math.random()}`,
                     name: String(row.Nama || '').trim(),
                     nip: String(row.NIP || '').trim(),
                     username: String(row.Username || '').trim(),
@@ -182,34 +154,33 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ user, onLogout }) => {
                 };
 
                 if (teacher.name && teacher.username && teacher.password) {
-                    validTeachers.push(teacher);
+                   if (existingUsernames.has(teacher.username)) {
+                       skippedCount++;
+                   } else {
+                       newTeachers.push(teacher);
+                       existingUsernames.add(teacher.username);
+                       createdCount++;
+                   }
                 } else {
-                    invalidRows.push(row);
+                    invalidCount++;
                 }
             });
 
-            if (validTeachers.length === 0) {
-                alert(`Tidak ada data guru yang valid ditemukan. Pastikan setiap baris memiliki kolom 'Nama', 'Username', dan 'Password' yang terisi.`);
-                return;
+            if (createdCount === 0 && skippedCount === 0 && invalidCount > 0) {
+                 alert(`Tidak ada data guru yang valid ditemukan. Pastikan setiap baris memiliki kolom 'Nama', 'Username', dan 'Password' yang terisi.`);
+                 return;
             }
-            
-            const { createdCount, skippedCount } = await api.bulkCreateTeachers(validTeachers);
 
-            fetchTeachers();
+            setTeachers(newTeachers);
             
-            // Build a comprehensive summary message for the user
             let summary = `Proses Impor Selesai.\n\n`;
             summary += `- ${createdCount} guru baru berhasil ditambahkan.\n`;
             if (skippedCount > 0) {
                 summary += `- ${skippedCount} guru dilewati karena username sudah ada.\n`;
             }
-            if (invalidRows.length > 0) {
-                summary += `- ${invalidRows.length} baris dilewati karena data tidak lengkap (Nama/Username/Password kosong).\n`;
+            if (invalidCount > 0) {
+                summary += `- ${invalidCount} baris dilewati karena data tidak lengkap (Nama/Username/Password kosong).\n`;
             }
-            if (createdCount > 0) {
-                summary += `\nPENTING: Sekarang, buat akun login untuk guru baru di Firebase Authentication Console.`
-            }
-
             alert(summary);
 
         } catch (error) {
@@ -231,17 +202,11 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ user, onLogout }) => {
       return;
     }
     try {
-      const payload: Partial<User> = { name: accountName, username: accountUsername };
-      await api.updateUser(user.id, payload);
-
+      await apiRequest('/users/update', { method: 'PUT', body: JSON.stringify({ name: accountName, username: accountUsername }) });
       if (accountPassword) {
-        await api.updateUserPassword(accountPassword);
+         await apiRequest('/users/update-password', { method: 'POST', body: JSON.stringify({ newPassword: accountPassword }) });
       }
-      
-      alert('Informasi akun berhasil diperbarui. Anda mungkin perlu login kembali untuk melihat perubahan.');
-       // Update user in current session state
-      const updatedUser = { ...user, name: accountName, username: accountUsername };
-      // The onAuthStateChanged will handle the rest
+      alert('Informasi akun berhasil diperbarui (simulasi).');
     } catch (error: any) {
       console.error("Failed to update account:", error);
       alert(`Gagal memperbarui akun. ${error.message}`);
@@ -267,16 +232,18 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ user, onLogout }) => {
     }
 
     try {
-        const messagePayload: Omit<Message, 'id' | 'timestamp' | 'read'> = {
+        const messagePayload: Message = {
+            id: `msg_${Date.now()}`,
             senderId: user.id,
             senderName: user.name,
             recipientId: selectedRecipientId,
             content: newMessage,
             attachment: attachment || undefined,
+            timestamp: new Date().toISOString(),
+            read: false,
         };
-        await api.sendMessage(messagePayload);
-        
-        fetchMessages();
+        await apiRequest('/messages/send', { method: 'POST', body: JSON.stringify(messagePayload) });
+        setMessages(prev => [...prev, messagePayload]);
         setNewMessage('');
         setAttachment(null);
         setShowEmojiPicker(false);
@@ -289,8 +256,8 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ user, onLogout }) => {
   const handleDeleteMessage = async (messageId: string) => {
     if (window.confirm('Apakah Anda yakin ingin menghapus pesan ini?')) {
         try {
-            await api.deleteMessage(messageId);
-            fetchMessages();
+            await apiRequest(`/messages/${messageId}`, { method: 'DELETE' });
+            setMessages(prev => prev.filter(m => m.id !== messageId));
         } catch (error) {
             console.error("Failed to delete message:", error);
             alert("Gagal menghapus pesan.");
@@ -372,9 +339,7 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ user, onLogout }) => {
                   </div>
                   <input type="file" ref={teacherFileInputRef} onChange={handleTeacherFileImport} className="hidden" accept=".xlsx, .xls"/>
                    <p className="text-sm text-gray-500 mb-4 p-3 bg-yellow-100 border border-yellow-300 rounded-md">
-                      <strong>Penting:</strong> Proses impor data guru terdiri dari 2 langkah:<br/>
-                      1. Gunakan tombol "Import Excel" untuk mengunggah data profil guru ke database.<br/>
-                      2. Setelah itu, Anda <strong>wajib</strong> membuat akun login untuk setiap guru secara manual di <a href="https://console.firebase.google.com/" target="_blank" rel="noopener noreferrer" className="underline text-primary-600">Firebase Authentication Console</a>. Gunakan <strong>Username</strong> dari file Excel sebagai <strong>email</strong> (misal: 'guru1' menjadi 'guru1@example.com') dan <strong>Password</strong> yang sama.
+                      <strong>Info:</strong> Fitur tambah, edit, dan hapus guru secara individu tidak tersedia dalam versi demo ini. Silakan gunakan fitur impor Excel untuk menambahkan data guru baru.
                    </p>
                   <div className="overflow-x-auto">
                     <table className="w-full text-left">
@@ -401,7 +366,7 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ user, onLogout }) => {
                     <h2 className="text-xl font-semibold text-primary-700">Data Admin</h2>
                   </div>
                   <p className="text-sm text-gray-500 mb-4 p-3 bg-yellow-100 border border-yellow-300 rounded-md">
-                      <strong>Catatan:</strong> Manajemen admin (menambah, mengedit, atau menghapus) harus dilakukan langsung dari <a href="https://console.firebase.google.com/" target="_blank" rel="noopener noreferrer" className="underline text-primary-600">Firebase Console</a>.
+                      <strong>Catatan:</strong> Manajemen admin (menambah, mengedit, atau menghapus) tidak tersedia dalam versi demo aplikasi ini.
                    </p>
                   <div className="overflow-x-auto">
                     <table className="w-full text-left">

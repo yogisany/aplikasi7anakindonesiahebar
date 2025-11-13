@@ -3,52 +3,34 @@ import LoginPage from './pages/LoginPage';
 import AdminDashboard from './pages/AdminDashboard';
 import TeacherDashboard from './pages/TeacherDashboard';
 import { User } from './types';
-import { auth, db } from './utils/firebase';
 
 const App: React.FC = () => {
   const [currentUser, setCurrentUser] = useState<User | null>(null);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    // FIX: Changed to v8 compat syntax `auth.onAuthStateChanged` to resolve module export error.
-    const unsubscribe = auth.onAuthStateChanged(async (userAuth) => {
-      if (userAuth) {
-        // Pengguna login, ambil data profil dari Firestore
-        try {
-          // FIX: Changed Firestore call to v8 compat syntax.
-          const userDocRef = db.collection('users').doc(userAuth.uid);
-          const userDoc = await userDocRef.get();
-          if (userDoc.exists) {
-            const userData = userDoc.data() as Omit<User, 'id'>;
-            setCurrentUser({ id: userAuth.uid, ...userData });
-          } else {
-            console.error("Profil pengguna tidak ditemukan di Firestore. Sesi logout dimulai.");
-            await auth.signOut();
-            setCurrentUser(null);
-          }
-        } catch (error) {
-           console.error("Gagal mengambil profil pengguna:", error);
-           await auth.signOut();
-           setCurrentUser(null);
-        }
-      } else {
-        // Pengguna logout
-        setCurrentUser(null);
+    // Cek sesi login dari localStorage saat aplikasi pertama kali dimuat
+    try {
+      const storedUser = localStorage.getItem('currentUser');
+      if (storedUser) {
+        setCurrentUser(JSON.parse(storedUser));
       }
+    } catch (error) {
+      console.error("Gagal memuat sesi pengguna:", error);
+      localStorage.removeItem('currentUser'); // Hapus data yang korup
+    } finally {
       setLoading(false);
-    });
-
-    // Cleanup subscription on unmount
-    return () => unsubscribe();
+    }
   }, []);
 
-  const handleLogout = useCallback(async () => {
-    try {
-      await auth.signOut();
-      setCurrentUser(null);
-    } catch (error) {
-      console.error("Gagal saat logout:", error);
-    }
+  const handleLogin = useCallback((user: User) => {
+    localStorage.setItem('currentUser', JSON.stringify(user));
+    setCurrentUser(user);
+  }, []);
+
+  const handleLogout = useCallback(() => {
+    localStorage.removeItem('currentUser');
+    setCurrentUser(null);
   }, []);
 
   if (loading) {
@@ -60,7 +42,7 @@ const App: React.FC = () => {
   }
 
   if (!currentUser) {
-    return <LoginPage />;
+    return <LoginPage onLogin={handleLogin} />;
   }
 
   return (
